@@ -145,7 +145,7 @@ assert(lpeg.match(p, "12+13+25-") == nil, "match the whole subject")
 
 -- 17 Adding an optional sign to numbers
 
-local space = lpeg.S(" \n\t")^0 -- optional space
+local space = lpeg.S(" \n\t")^0 --lpeg.P(" ")^0 + lpeg.P("\t")^0 --lpeg.S(" \n\t")^0 -- optional space
 local numbers = lpeg.C(lpeg.S("+-")^0 * lpeg.R("09")^1)/tonumber * space -- signed number with any spaces after
 
 assert(lpeg.match(numbers, "-12") == -12, "negative number")
@@ -197,8 +197,8 @@ local grammar = lpeg.P({"exp",
 assert(lpeg.match(grammar, "-12") == -12)
 assert(lpeg.match(grammar, "-12 * 2") == -24)
 assert(lpeg.match(grammar, "-12 * 2 + 24 -1 ") == -1)
-assert(lpeg.match(grammar, "-12 / 2 + 6  ") == 0)
-assert(lpeg.match(grammar, "-12 / 2 + 6 *2  ") == 6)
+assert(lpeg.match(grammar, "-12 /     2 + 6  ") == 0)
+assert(lpeg.match(grammar, "-12 /   2 + 6 *2  ") == 6)
 assert(lpeg.match(grammar, "12 % 2") == 0)
 assert(lpeg.match(grammar, "12 % 5") == 2)
 assert(lpeg.match(grammar, "1 + 2 ^ 2 - 6 ") == -1)
@@ -208,4 +208,12 @@ assert(lpeg.match(grammar, "1 + 2 ^ 2 - 6 ") == -1)
 assert(lpeg.match(grammar, "(3 + 2)^2") == 25)
 assert(lpeg.match(grammar, "(3 + 2)^2 + 3%2 - 3 - 23") == 0)
 
-  
+-- live session
+print(("AAABAAA:B"):match(".*:")) --> AAABAAA:
+--
+print(("AAAB:AAA:B"):match(".*:")) --> AAAB:AAA:
+
+local eM = lpeg.C(lpeg.S("AB")^1 * lpeg.S(":"))
+
+assert(eM:match("AAABAAA:B") == "AAABAAA:")
+assert(eM:match("AAAB:AAA:B") == "AAAB:")

@@ -1,0 +1,67 @@
+#! /usr/bin/env lua
+
+local laz = require "llang"
+local ut = require "utils"
+
+function file_exists(path)
+  local file = io.open(path, "rb")
+  if file then file:close() end
+  return file ~= nil
+end
+
+function readall(filename)
+  local fh = io.open(filename, "rb")
+  local contents = fh:read(_VERSION <= "Lua 5.2" and "*a" or "a")
+  fh:close()
+  return contents
+end
+
+-- run Lazarus VM
+local top = 0
+
+local function run(code, stack)
+  local pc = 1
+  while pc <= #code do
+    if code[pc] == "push" then
+      pc = pc + 1
+      top = top + 1
+      stack[top] = code[pc]
+    else
+      error("LAZ0 unkown op code:" .. code[pc])
+    end    
+    pc = pc + 1
+  end
+end
+
+local function usage()
+  return "Usage: " .. arg[0] .. "path/<source_file>"
+end
+
+local path = arg[1]
+
+if path == nil then 
+  print(usage())
+  os.exit(1)
+end
+
+if not file_exists(path) then
+  print ("LAZ1 file ".. path .. " not found")
+  os.exit(1)
+end
+
+local stack = {}
+
+local fh = io.open(path, "rb")
+local line = fh:read("*line")
+while line do
+    local code = laz.compile(laz.parse(line))
+    run(code, stack)
+    line = fh:read("*line")
+end
+fh:close()
+
+-- print stack
+ut.printtable(stack)
+
+
+
