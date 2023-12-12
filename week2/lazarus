@@ -19,6 +19,15 @@ end
 -- run Lazarus VM
 local top = 0
 
+local isDebug = #arg > 1 and arg[1] == "-debug"
+local function debug(f, msg)
+  return isDebug and f(msg)
+end
+
+local function tOf(b)
+  return b and 1 or 0
+end
+
 local function run(code, stack)
   local pc = 1
   while pc <= #code do
@@ -26,6 +35,42 @@ local function run(code, stack)
       pc = pc + 1
       top = top + 1
       stack[top] = code[pc]
+    elseif code[pc] == "add" then
+      stack[top - 1] = stack[top - 1] + stack[top]
+      top = top - 1
+    elseif code[pc] == "sub" then
+      stack[top - 1] = stack[top - 1] - stack[top]
+      top = top - 1
+    elseif code[pc] == "mul" then
+      stack[top - 1] = stack[top - 1] * stack[top]
+      top = top - 1
+    elseif code[pc] == "div" then
+      stack[top - 1] = stack[top - 1] / stack[top]
+      top = top - 1
+     elseif code[pc] == "exp" then
+       stack[top - 1] = stack[top - 1] ^ stack[top]
+       top = top - 1
+     elseif code[pc] == "rem" then
+       stack[top - 1] = stack[top - 1] % stack[top]
+       top = top - 1  
+    elseif code[pc] == "lq" then
+       stack[top - 1] = tOf(stack[top - 1] <= stack[top])
+       top = top - 1  
+     elseif code[pc] == "gq" then
+       stack[top - 1] = tOf(stack[top - 1] >= stack[top])
+       top = top - 1  
+     elseif code[pc] == "eq" then
+       stack[top - 1] = tOf(stack[top - 1] == stack[top])
+       top = top - 1  
+     elseif code[pc] == "nq" then
+       stack[top - 1] = tOf(stack[top - 1] ~= stack[top])
+       top = top - 1  
+     elseif code[pc] == "lt" then
+       stack[top - 1] = tOf(stack[top - 1] < stack[top])
+       top = top - 1  
+     elseif code[pc] == "gt" then
+       stack[top - 1] = tOf(stack[top - 1] > stack[top])
+       top = top - 1    
     else
       error("LAZ0 unkown op code:" .. code[pc])
     end    
@@ -34,10 +79,10 @@ local function run(code, stack)
 end
 
 local function usage()
-  return "Usage: " .. arg[0] .. "path/<source_file>"
+  return "Usage: " .. arg[0] .. "[options] path/<source_file>"
 end
 
-local path = arg[1]
+local path = arg[#arg]
 
 if path == nil then 
   print(usage())
@@ -54,14 +99,20 @@ local stack = {}
 local fh = io.open(path, "rb")
 local line = fh:read("*line")
 while line do
-    local code = laz.compile(laz.parse(line))
+    local ast = laz.parse(line)
+    debug(print, "AST")
+    debug(ut.printtable, ast)
+    local code = laz.compile(ast)
+    debug(print, "Stack")
+    debug(ut.printtable,code)
     run(code, stack)
     line = fh:read("*line")
 end
 fh:close()
 
 -- print stack
-ut.printtable(stack)
+debug(print, "Stack after calculations")
+debug(ut.printtable, stack)
 
 
 

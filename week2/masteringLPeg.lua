@@ -1,20 +1,13 @@
 local lpeg = require "lpeg"
+local ut = require "utils"
 
-function printtable(t)
-  if type(t) ~= "table" then print "" end
-  local out = "{" .. "\n"
-  for k,v in pairs(t) do
-    out = out .. "\t".. k .. ": " .. tostring(v) .. "\n"
-  end
-  print (out .. "}" .. "\n")
-end
 
-printtable({a="hello", "exp", "some number"})
+ut.printtable({a="hello", "exp", "some number"})
 
 
 
 
-printtable(lpeg.locale())
+ut.printtable(lpeg.locale())
 
 
 function valueOf(p)
