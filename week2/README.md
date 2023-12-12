@@ -9,11 +9,11 @@
 
 ## Running tests
 Run test cases from command line
->lua <file starts with test_>.lua
+> lua file starts with test_.lua
 
 ## 
 2. Compile and run Lazarus source code
-> ./lazarus <filename>.lz
+> ./lazarus filename.lz
 
 For example ./lazarus numbers.lz
 
