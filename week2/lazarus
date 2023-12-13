@@ -71,6 +71,10 @@ local function run(code, stack)
      elseif code[pc] == "gt" then
        stack[top - 1] = tOf(stack[top - 1] > stack[top])
        top = top - 1    
+     elseif code[pc] == "dec" then
+       stack[top] = stack[top] - 1
+     elseif code[pc] == "inc" then
+       stack[top] = stack[top] + 1
     else
       error("LAZ0 unkown op code:" .. code[pc])
     end    

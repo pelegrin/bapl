@@ -33,10 +33,14 @@ local function foldBin(lst)
   return tree
 end
 
+local function foldUn(lst)
+  return { tag = "unop", op = lst[1], e1 = lst[2]}
+end
+
 -- return AST of Lazarus language
   local loc = lpeg.locale()
   local space = loc.space^0
-  local sign = lpeg.S("-+")^0
+  local sign = lpeg.S("-+")^-1
   local h = lpeg.S("aAbBcCdDeEfF") 
   local x = lpeg.S("xX")
   local floats = sign * loc.digit^1 * "." * loc.digit^1 / number * space
@@ -48,17 +52,20 @@ end
   local opM = lpeg.C(lpeg.S("*/%")) * space
   local opE = lpeg.C(lpeg.S("^")) * space  
   local opC = lpeg.C(lpeg.P("<=") + ">=" + "==" + "!=" + "<" + ">") * space
+  local opIncDec = lpeg.C(lpeg.P("--") + "++")
   local openP = "(" * space
   local closingP = ")" * space
 
+  local unary = lpeg.V("unary")
   local primary = lpeg.V("primary")
   local term = lpeg.V("term")
   local exponent = lpeg.V("exponent")
   local exp = lpeg.V("exp")
   local logic = lpeg.V("logic")
-  local grammar = lpeg.P({"logic",  
+  local grammar = lpeg.P({"logic",
   primary = numerals + openP * logic * closingP,
-  exponent = space * lpeg.Ct(primary * (opE * primary)^0) / foldBin,
+  unary = space * lpeg.Ct(opIncDec * primary) /foldUn + primary,    
+  exponent = space * lpeg.Ct(unary * (opE * unary)^0) / foldBin,
   term = space * lpeg.Ct(exponent * (opM * exponent)^0) / foldBin,
   exp = space * lpeg.Ct(term * (opA * term)^0) / foldBin, 
   logic = space * lpeg.Ct(exp * (opC * exp)^0) / foldBin
@@ -79,7 +86,8 @@ end
 
 local ops = {["+"] = "add", ["-"] = "sub",
              ["*"] = "mul", ["/"] = "div", ["^"] = "exp", ["%"] = "rem",
-             ["<="] = "lq", [">="] = "gq", ["=="] = "eq", ["!="] = "nq", ["<"] = "lt", [">"] = "gt"
+             ["<="] = "lq", [">="] = "gq", ["=="] = "eq", ["!="] = "nq", ["<"] = "lt", [">"] = "gt",
+             ["--"] = "dec", ["++"] = "inc"
              }
            
 local function codeExp(state, ast)
@@ -89,6 +97,9 @@ local function codeExp(state, ast)
   elseif ast.tag == "binop" then
     codeExp(state, ast.e1)
     codeExp(state, ast.e2)
+    addCode(state, ops[ast.op])
+  elseif ast.tag == "unop" then
+    codeExp(state, ast.e1)
     addCode(state, ops[ast.op])
   else error("invalid tree")
    end    
