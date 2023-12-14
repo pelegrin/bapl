@@ -16,7 +16,7 @@ local function number(n)
 end
 
 local function hex(n)  
-  return node(tonumber(string.gsub(n, "0[xX]", ""), 16))
+  return node(tonumber(n, 16))
 end
 
 --[[
@@ -43,16 +43,16 @@ end
   local sign = lpeg.S("-+")^-1
   local h = lpeg.S("aAbBcCdDeEfF") 
   local x = lpeg.S("xX")
-  local floats = sign * loc.digit^1 * "." * loc.digit^1 / number * space
-  local scientific = sign * loc.digit^1* ("." * loc.digit^1 + loc.digit^0 )* lpeg.S("eE") * lpeg.P("-")^0 * loc.digit^1 / number * space
-  local decimals = sign * loc.digit^1 / number * (-x) * space
-  local hexes = sign * "0" * x * (h + loc.digit)^1 / hex * space
+  local floats = loc.digit^1 * "." * loc.digit^1 / number * space
+  local scientific = loc.digit^1* ("." * loc.digit^1 + loc.digit^0 )* lpeg.S("eE") * lpeg.P("-")^0 * loc.digit^1 / number * space
+  local decimals = loc.digit^1 / number * (-x) * space
+  local hexes = "0" * x * lpeg.C((h + loc.digit)^1) / hex * space
   local numerals = hexes + scientific + floats + decimals
   local opA = lpeg.C(lpeg.S("+-")) * space
   local opM = lpeg.C(lpeg.S("*/%")) * space
   local opE = lpeg.C(lpeg.S("^")) * space  
   local opC = lpeg.C(lpeg.P("<=") + ">=" + "==" + "!=" + "<" + ">") * space
-  local opIncDec = lpeg.C(lpeg.P("--") + "++")
+  local opUn = lpeg.C(lpeg.P("--") + "++" + "-" + "+")
   local openP = "(" * space
   local closingP = ")" * space
 
@@ -64,7 +64,7 @@ end
   local logic = lpeg.V("logic")
   local grammar = lpeg.P({"logic",
   primary = numerals + openP * logic * closingP,
-  unary = space * lpeg.Ct(opIncDec * primary) /foldUn + primary,    
+  unary = space * lpeg.Ct(opUn * primary) /foldUn + primary,    
   exponent = space * lpeg.Ct(unary * (opE * unary)^0) / foldBin,
   term = space * lpeg.Ct(exponent * (opM * exponent)^0) / foldBin,
   exp = space * lpeg.Ct(term * (opA * term)^0) / foldBin, 
@@ -87,7 +87,7 @@ end
 local ops = {["+"] = "add", ["-"] = "sub",
              ["*"] = "mul", ["/"] = "div", ["^"] = "exp", ["%"] = "rem",
              ["<="] = "lq", [">="] = "gq", ["=="] = "eq", ["!="] = "nq", ["<"] = "lt", [">"] = "gt",
-             ["--"] = "dec", ["++"] = "inc"
+             ["--"] = "dec", ["++"] = "inc", ["-"] = "minus", ["+"] = "plus"
              }
            
 local function codeExp(state, ast)

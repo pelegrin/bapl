@@ -75,6 +75,10 @@ local function run(code, stack)
        stack[top] = stack[top] - 1
      elseif code[pc] == "inc" then
        stack[top] = stack[top] + 1
+    elseif code[pc] == "minus" then
+       stack[top] = -stack[top]
+    elseif code[pc] == "plus" then
+       stack[top] = stack[top]   -- can be noop
     else
       error("LAZ0 unkown op code:" .. code[pc])
     end    
