@@ -13,7 +13,5 @@ jobs:
    - uses: actions/checkout@v2
    - name: Install lua and deps
      run: sudo apt-get -y update && sudo apt-get -y install bash lua5.3 lua-inspect lua-unit lua-lpeg lua-any luakit luarocks
-   - name: Install lpeg and luaunit
-     run: sudo luarocks install lpeg luaunit
    - name: run tests
      run: bash scripts/run_tests.sh
