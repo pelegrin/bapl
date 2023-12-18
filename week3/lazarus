@@ -126,6 +126,7 @@ local l = 1
 while line do
     local status, ast = pcall(laz.parse, line)    
     status = status and ast ~= nil or errorHandler("Syntax error in line: ".. l .. "\n" .. line, ast)    
+    debug(print, "Parsing:" .. tostring(line))
     debug(print, "AST")
     debug(ut.printtable, ast)
     status, code = pcall(laz.compile, ast)
@@ -134,6 +135,7 @@ while line do
     debug(ut.printtable,code)
     status, err =  pcall(run, code, stack, mem)
     status = status or errorHandler("VM error in line: ".. l .. "\n" .. line, err)
+    debug(print, "Result: " .. tostring(stack[top]))
     if not isInteractive then
       line = fh:read("*line")
       l = l + 1
