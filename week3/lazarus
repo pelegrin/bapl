@@ -28,6 +28,11 @@ local function tOf(b)
   return b and 1 or 0
 end
 
+local function errorHandler(message, err)
+  print("LZ2 ".. tostring(message).. " \n" .. " ".. tostring(err) .."\n")
+  os.exit(2)
+end
+
 local function run(code, stack, mem)
   local pc = 1
   while pc <= #code do
@@ -113,31 +118,22 @@ local stack = {}
 local mem = {}
 
 local fh = io.open(path, "rb")
-local p_line = 1
+local l = 1
 local line = fh:read("*line")
 
-local function syntax_errorHandler()
-  print("LZ2 Syntax error in line ".. tostring(p_line).. " \n" .. " "..line.."\n")
-  os.exit(2)
-end 
-
-local function errorHandler(err)
-    print("LZ3 Execution error ".. tostring(p_line).. " \n" .. " "..line.."\n")
-    print(err)
-  os.exit(1)
-end
-
-
 while line do
-    local ast = laz.parse(line)
+    local status, ast = pcall(laz.parse, line)    
+    status = status and ast ~= nil or errorHandler("Syntax error in line: ".. l .. "\n" .. line, ast)    
     debug(print, "AST")
     debug(ut.printtable, ast)
-    local code = laz.compile(ast)
+    status, code = pcall(laz.compile, ast)
+    status = status or errorHandler("Compilation error in line: ".. l .. "\n" .. line, code)
     debug(print, "Stack")
     debug(ut.printtable,code)
-    run(code, stack, mem)
+    status, err =  pcall(run, code, stack, mem)
+    status = status or errorHandler("VM error in line: ".. l .. "\n" .. line, err)
     line = fh:read("*line")
-    p_line = p_line + 1
+    l = l + 1
 end
 fh:close()
 

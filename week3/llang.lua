@@ -97,7 +97,7 @@ end
   })
   grammar = space * grammar * -1
 local function parse(input)
-  return grammar:match(input) or {}
+  return grammar:match(input) or nil
 end
 
 --[[
