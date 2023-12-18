@@ -28,13 +28,21 @@ local function tOf(b)
   return b and 1 or 0
 end
 
-local function run(code, stack)
+local function run(code, stack, mem)
   local pc = 1
   while pc <= #code do
     if code[pc] == "push" then
       pc = pc + 1
       top = top + 1
       stack[top] = code[pc]
+     elseif code[pc] == "load" then
+       pc = pc + 1
+       top = top + 1
+       stack[top] = mem[code[pc]]
+     elseif code[pc] == "store" then
+       pc = pc + 1
+       mem[code[pc]] = stack[top]
+       top = top + 1
     elseif code[pc] == "add" then
       stack[top - 1] = stack[top - 1] + stack[top]
       top = top - 1
@@ -77,8 +85,6 @@ local function run(code, stack)
        stack[top] = stack[top] + 1
     elseif code[pc] == "minus" then
        stack[top] = -stack[top]
-    elseif code[pc] == "plus" then
-       stack[top] = stack[top]   -- can be noop
     else
       error("LAZ0 unkown op code:" .. code[pc])
     end    
@@ -102,10 +108,26 @@ if not file_exists(path) then
   os.exit(1)
 end
 
+
 local stack = {}
+local mem = {}
 
 local fh = io.open(path, "rb")
+local p_line = 1
 local line = fh:read("*line")
+
+local function syntax_errorHandler()
+  print("LZ2 Syntax error in line ".. tostring(p_line).. " \n" .. " "..line.."\n")
+  os.exit(2)
+end 
+
+local function errorHandler(err)
+    print("LZ3 Execution error ".. tostring(p_line).. " \n" .. " "..line.."\n")
+    print(err)
+  os.exit(1)
+end
+
+
 while line do
     local ast = laz.parse(line)
     debug(print, "AST")
@@ -113,14 +135,16 @@ while line do
     local code = laz.compile(ast)
     debug(print, "Stack")
     debug(ut.printtable,code)
-    run(code, stack)
+    run(code, stack, mem)
     line = fh:read("*line")
+    p_line = p_line + 1
 end
 fh:close()
 
 -- print stack
 debug(print, "Stack after calculations")
 debug(ut.printtable, stack)
+debug(print, "top: " .. tostring(top))
 
 
 
