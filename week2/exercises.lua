@@ -57,7 +57,7 @@ pattern: .*!
 lazy match: "hello!"
 greedy match: "hello!hello!"
 --]]
-local subject = "hello!hello!hello"
+local subject = "hello!hello!"
 local lmatch = "hello!"
 local gmatch = "hello!hello!"
 local s1 = lpeg.C(lpeg.R("az")^1 * "!")

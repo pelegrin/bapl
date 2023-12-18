@@ -1,0 +1,126 @@
+#! /usr/bin/env lua
+
+local laz = require "llang"
+local ut = require "utils"
+
+function file_exists(path)
+  local file = io.open(path, "rb")
+  if file then file:close() end
+  return file ~= nil
+end
+
+function readall(filename)
+  local fh = io.open(filename, "rb")
+  local contents = fh:read(_VERSION <= "Lua 5.2" and "*a" or "a")
+  fh:close()
+  return contents
+end
+
+-- run Lazarus VM
+local top = 0
+
+local isDebug = #arg > 1 and arg[1] == "-debug"
+local function debug(f, msg)
+  return isDebug and f(msg)
+end
+
+local function tOf(b)
+  return b and 1 or 0
+end
+
+local function run(code, stack)
+  local pc = 1
+  while pc <= #code do
+    if code[pc] == "push" then
+      pc = pc + 1
+      top = top + 1
+      stack[top] = code[pc]
+    elseif code[pc] == "add" then
+      stack[top - 1] = stack[top - 1] + stack[top]
+      top = top - 1
+    elseif code[pc] == "sub" then
+      stack[top - 1] = stack[top - 1] - stack[top]
+      top = top - 1
+    elseif code[pc] == "mul" then
+      stack[top - 1] = stack[top - 1] * stack[top]
+      top = top - 1
+    elseif code[pc] == "div" then
+      stack[top - 1] = stack[top - 1] / stack[top]
+      top = top - 1
+     elseif code[pc] == "exp" then
+       stack[top - 1] = stack[top - 1] ^ stack[top]
+       top = top - 1
+     elseif code[pc] == "rem" then
+       stack[top - 1] = stack[top - 1] % stack[top]
+       top = top - 1  
+    elseif code[pc] == "lq" then
+       stack[top - 1] = tOf(stack[top - 1] <= stack[top])
+       top = top - 1  
+     elseif code[pc] == "gq" then
+       stack[top - 1] = tOf(stack[top - 1] >= stack[top])
+       top = top - 1  
+     elseif code[pc] == "eq" then
+       stack[top - 1] = tOf(stack[top - 1] == stack[top])
+       top = top - 1  
+     elseif code[pc] == "nq" then
+       stack[top - 1] = tOf(stack[top - 1] ~= stack[top])
+       top = top - 1  
+     elseif code[pc] == "lt" then
+       stack[top - 1] = tOf(stack[top - 1] < stack[top])
+       top = top - 1  
+     elseif code[pc] == "gt" then
+       stack[top - 1] = tOf(stack[top - 1] > stack[top])
+       top = top - 1    
+     elseif code[pc] == "dec" then
+       stack[top] = stack[top] - 1
+     elseif code[pc] == "inc" then
+       stack[top] = stack[top] + 1
+    elseif code[pc] == "minus" then
+       stack[top] = -stack[top]
+    elseif code[pc] == "plus" then
+       stack[top] = stack[top]   -- can be noop
+    else
+      error("LAZ0 unkown op code:" .. code[pc])
+    end    
+    pc = pc + 1
+  end
+end
+
+local function usage()
+  return "Usage: " .. arg[0] .. "[options] path/<source_file>"
+end
+
+local path = arg[#arg]
+
+if path == nil then 
+  print(usage())
+  os.exit(1)
+end
+
+if not file_exists(path) then
+  print ("LAZ1 file ".. path .. " not found")
+  os.exit(1)
+end
+
+local stack = {}
+
+local fh = io.open(path, "rb")
+local line = fh:read("*line")
+while line do
+    local ast = laz.parse(line)
+    debug(print, "AST")
+    debug(ut.printtable, ast)
+    local code = laz.compile(ast)
+    debug(print, "Stack")
+    debug(ut.printtable,code)
+    run(code, stack)
+    line = fh:read("*line")
+end
+fh:close()
+
+-- print stack
+debug(print, "Stack after calculations")
+debug(ut.printtable, stack)
+
+
+
