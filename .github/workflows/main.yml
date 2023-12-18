@@ -12,7 +12,7 @@ jobs:
   steps:
    - uses: actions/checkout@v2
    - name: Install lua and deps
-     run: sudo apt-get -y update && sudo apt-get -y install bash lua luarocks
+     run: sudo apt-get -y update && sudo apt-get -y install bash lua5.4 luarocks
    - name: Install lpeg and luaunit
      run: luarocks install lpeg luaunit
    - name: run tests
