@@ -19,7 +19,9 @@ end
 -- run Lazarus VM
 local top = 0
 
-local isDebug = #arg > 1 and arg[1] == "-debug"
+local isInteractive = arg[1] == "-i"
+local isDebug = #arg > 1 and arg[1] == "-debug" or isInteractive
+
 local function debug(f, msg)
   return isDebug and f(msg)
 end
@@ -101,14 +103,14 @@ local function usage()
   return "Usage: " .. arg[0] .. "[options] path/<source_file>"
 end
 
-local path = arg[#arg]
+local path = not isInteractive and arg[#arg] or #arg > 1 and table.concat(arg, " ", 2)
 
-if path == nil then 
+if path == nil and not isInteractive then 
   print(usage())
   os.exit(1)
 end
 
-if not file_exists(path) then
+if not isInteractive and not file_exists(path) then
   print ("LAZ1 file ".. path .. " not found")
   os.exit(1)
 end
@@ -117,10 +119,10 @@ end
 local stack = {}
 local mem = {}
 
-local fh = io.open(path, "rb")
-local l = 1
-local line = fh:read("*line")
+local fh = not isInteractive and io.open(path, "rb")
+local line = not isInteractive and fh:read("*line") or path or io.read()
 
+local l = 1
 while line do
     local status, ast = pcall(laz.parse, line)    
     status = status and ast ~= nil or errorHandler("Syntax error in line: ".. l .. "\n" .. line, ast)    
@@ -132,10 +134,14 @@ while line do
     debug(ut.printtable,code)
     status, err =  pcall(run, code, stack, mem)
     status = status or errorHandler("VM error in line: ".. l .. "\n" .. line, err)
-    line = fh:read("*line")
-    l = l + 1
+    if not isInteractive then
+      line = fh:read("*line")
+      l = l + 1
+     else
+       line = io.read()
+    end
 end
-fh:close()
+status = not isInteractive and fh:close()
 
 -- print stack
 debug(print, "Stack after calculations")
