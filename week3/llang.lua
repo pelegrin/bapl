@@ -1,4 +1,5 @@
 local lpeg = require "lpeg"
+local ut = require "utils"
 
 local lang = {}
 
@@ -7,16 +8,30 @@ local function valueOf(p)
   return lpeg.C(p)
 end
 
-local function node(num)
+local function nodeAssign(id, exp)
+  return {tag = "assign", id = id.val, exp = exp}
+end
+
+
+local function nodeVar(v)
+  return {tag = "var", val = v}
+end
+
+local function nodeRef(r)
+  return {tag = "ref", val = r}
+end
+
+
+local function nodeNum(num)
   return {tag = "number", val = num}
 end
 
 local function number(n)
-  return node(tonumber(n))
+  return nodeNum(tonumber(n))
 end
 
 local function hex(n)  
-  return node(tonumber(n, 16))
+  return nodeNum(tonumber(n, 16))
 end
 
 --[[
@@ -34,7 +49,10 @@ local function foldBin(lst)
 end
 
 local function foldUn(lst)
-  return { tag = "unop", op = lst[1], e1 = lst[2]}
+  local op = lst[1]
+  local val = lst[2]
+  if op == "+" then return val end -- folding of unary plus
+  return { tag = "unop", op = op, e1 = val}
 end
 
 -- return AST of Lazarus language
@@ -43,6 +61,8 @@ end
   local sign = lpeg.S("-+")^-1
   local h = lpeg.S("aAbBcCdDeEfF") 
   local x = lpeg.S("xX")
+  local sym = lpeg.R("az", "AZ")
+  local underscore = lpeg.S("_")
   local floats = loc.digit^1 * "." * loc.digit^1 / number * space
   local scientific = loc.digit^1* ("." * loc.digit^1 + loc.digit^0 )* lpeg.S("eE") * lpeg.P("-")^0 * loc.digit^1 / number * space
   local decimals = loc.digit^1 / number * (-x) * space
@@ -53,17 +73,22 @@ end
   local opE = lpeg.C(lpeg.S("^")) * space  
   local opC = lpeg.C(lpeg.P("<=") + ">=" + "==" + "!=" + "<" + ">") * space
   local opUn = lpeg.C(lpeg.P("--") + "++" + "-" + "+")
+  local opAssign = lpeg.S("=") * space
   local openP = "(" * space
   local closingP = ")" * space
-
+  local variable = (sym^1 + underscore * underscore^-1 * sym^1) * loc.alnum^0 / nodeVar * space
+  local ref = lpeg.S("$") * (sym^1 * loc.alnum^0 / nodeRef) * space
+  local id = variable + ref
   local unary = lpeg.V("unary")
   local primary = lpeg.V("primary")
   local term = lpeg.V("term")
   local exponent = lpeg.V("exponent")
   local exp = lpeg.V("exp")
   local logic = lpeg.V("logic")
-  local grammar = lpeg.P({"logic",
-  primary = numerals + openP * logic * closingP,
+  local statement = lpeg.V("statement")
+  local grammar = lpeg.P({"statement",
+  statement = space * id * opAssign * logic /nodeAssign + logic,    
+  primary = numerals + openP * logic * closingP + id,
   unary = space * lpeg.Ct(opUn * primary) /foldUn + primary,    
   exponent = space * lpeg.Ct(unary * (opE * unary)^0) / foldBin,
   term = space * lpeg.Ct(exponent * (opM * exponent)^0) / foldBin,
@@ -87,12 +112,18 @@ end
 local ops = {["+"] = "add", ["-"] = "sub",
              ["*"] = "mul", ["/"] = "div", ["^"] = "exp", ["%"] = "rem",
              ["<="] = "lq", [">="] = "gq", ["=="] = "eq", ["!="] = "nq", ["<"] = "lt", [">"] = "gt",
-             ["--"] = "dec", ["++"] = "inc", ["-"] = "minus", ["+"] = "plus"
+             ["--"] = "dec", ["++"] = "inc", ["-"] = "minus"
              }
            
 local function codeExp(state, ast)
   if ast.tag == "number" then
     addCode(state, "push")
+    addCode(state, ast.val)
+  elseif ast.tag == "var" then
+    addCode(state, "load")
+    addCode(state, ast.val)
+  elseif ast.tag == "ref" then
+    addCode(state, "loadg")
     addCode(state, ast.val)
   elseif ast.tag == "binop" then
     codeExp(state, ast.e1)
@@ -105,10 +136,20 @@ local function codeExp(state, ast)
    end    
 end
 
+local function codeStatement(state, ast)
+  if ast.tag == "assign" then
+    codeExp(state, ast.exp)
+    addCode(state, "store")
+    addCode(state, ast.id)    
+  else codeExp(state, ast)
+  end    
+end
+
+
 -- compile AST
 local function compile(ast)
   local state = {code = {}}
-  codeExp(state, ast)
+  codeStatement(state, ast)
   return state.code
 end
 
