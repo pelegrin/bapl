@@ -21,6 +21,9 @@ local function nodeRef(r)
   return {tag = "ref", val = r}
 end
 
+local function nodeSys(exp)
+  return {tag = "sys", code = "1", exp = exp}
+end
 
 local function nodeNum(num)
   return {tag = "number", val = num}
@@ -48,6 +51,15 @@ local function foldBin(lst)
   return tree
 end
 
+-- Convert a list {st1, ",", st2, "," st3, ...} into a tree
+local function foldSts(lst)
+  local tree = lst[1]
+  for i = 2, #lst do
+    tree = { tag = "seq", s1 = tree, s2 = lst[i] }
+  end  
+  return tree
+end
+
 local function foldUn(lst)
   local op = lst[1]
   local val = lst[2]
@@ -62,6 +74,7 @@ end
   local h = lpeg.S("aAbBcCdDeEfF") 
   local x = lpeg.S("xX")
   local sym = lpeg.R("az", "AZ")
+  local sep = lpeg.S(",")
   local underscore = lpeg.S("_")
   local floats = loc.digit^1 * "." * loc.digit^1 / number * space
   local scientific = loc.digit^1* ("." * loc.digit^1 + loc.digit^0 )* lpeg.S("eE") * lpeg.P("-")^0 * loc.digit^1 / number * space
@@ -79,6 +92,7 @@ end
   local variable = (sym^1 + underscore * underscore^-1 * sym^1) * loc.alnum^0 / nodeVar * space
   local ref = lpeg.S("$") * (sym^1 * loc.alnum^0 / nodeRef) * space
   local id = variable + ref
+  local pr = space * lpeg.P("@")
   local unary = lpeg.V("unary")
   local primary = lpeg.V("primary")
   local term = lpeg.V("term")
@@ -86,8 +100,10 @@ end
   local exp = lpeg.V("exp")
   local logic = lpeg.V("logic")
   local statement = lpeg.V("statement")
-  local grammar = lpeg.P({"statement",
-  statement = space * id * opAssign * logic /nodeAssign + logic,    
+  local statements = lpeg.V("statements")
+  local grammar = lpeg.P({"statements",
+  statements = space * lpeg.Ct(statement * (sep * (statement + ""))^0)/ foldSts,    
+  statement = space * id * opAssign * logic /nodeAssign + pr*logic/nodeSys + logic,    
   primary = numerals + openP * logic * closingP + id,
   unary = space * lpeg.Ct(opUn * primary) /foldUn + primary,    
   exponent = space * lpeg.Ct(unary * (opE * unary)^0) / foldBin,
@@ -104,6 +120,21 @@ end
 **** Backend
 --]]
 
+local function toVar(frame, id)
+  local num = frame.vars[id]
+  if not num then
+    num = #frame.vars + 1
+    frame.vars[id] = num
+  end  
+  return num
+end
+
+local function fromVar(frame, id)
+  local num = frame.vars[id]
+  if not num then error("Undefined variable " ..tostring(id)) end
+  return num
+end
+
 local function addCode(state, op)
   local code = state.code
   code[#code + 1] = op
@@ -115,41 +146,49 @@ local ops = {["+"] = "add", ["-"] = "sub",
              ["--"] = "dec", ["++"] = "inc", ["-"] = "minus"
              }
            
-local function codeExp(state, ast)
+local function codeExp(frame, state, ast)
   if ast.tag == "number" then
     addCode(state, "push")
     addCode(state, ast.val)
   elseif ast.tag == "var" then
     addCode(state, "load")
-    addCode(state, ast.val)
+    addCode(state, fromVar(frame, ast.val))
   elseif ast.tag == "ref" then
     addCode(state, "loadg")
-    addCode(state, ast.val)
+    addCode(state, fromVar(frame,ast.val))
   elseif ast.tag == "binop" then
-    codeExp(state, ast.e1)
-    codeExp(state, ast.e2)
+    codeExp(frame, state, ast.e1)
+    codeExp(frame, state, ast.e2)
     addCode(state, ops[ast.op])
   elseif ast.tag == "unop" then
-    codeExp(state, ast.e1)
+    codeExp(frame, state, ast.e1)
     addCode(state, ops[ast.op])
   else error("invalid tree")
    end    
 end
 
-local function codeStatement(state, ast)
+local function codeStatement(frame, state, ast)
   if ast.tag == "assign" then
-    codeExp(state, ast.exp)
+    codeExp(frame, state, ast.exp)
     addCode(state, "store")
-    addCode(state, ast.id)    
-  else codeExp(state, ast)
+    addCode(state, toVar(frame, ast.id))    
+  elseif ast.tag == "seq" then
+    if ast.s2 == nil then return codeStatement(state, ast.s1) end
+    codeStatement(frame, state, ast.s1)
+    codeStatement(frame, state, ast.s2)
+  elseif ast.tag == "sys" then
+    codeExp(frame, state, ast.exp)
+    addCode(state, "syscall")
+    addCode(state, ast.code)
+  else codeExp(frame, state, ast)
   end    
 end
 
 
 -- compile AST
-local function compile(ast)
+local function compile(frame, ast)
   local state = {code = {}}
-  codeStatement(state, ast)
+  codeStatement(frame, state, ast)
   return state.code
 end
 
