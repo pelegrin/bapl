@@ -1,6 +1,7 @@
 local lu = require "luaunit"
 local lang = require "llang"
 local lpeg = require "lpeg"
+local ut = require "utils"
 
 function test_valueOf()
   local loc = lpeg.locale()
@@ -53,6 +54,33 @@ function test_varRef()
  lu.assertEquals(p("a = 1 * 3"), exp2, "parse multiplication expression")
 end
 
+function test_sequence()
+  local p = lang.parse
+  local exp = {
+    s1={
+        s1={exp={tag="number", val=0}, id="x", tag="assign"},
+        s2={exp={tag="number", val=0}, id="y", tag="assign"},
+        tag="seq"
+    },
+    s2={exp={tag="number", val=1}, id="z", tag="assign"},
+    tag="seq"
+  }
+  lu.assertEquals(p("x = 0, y = 0, z = 1"), exp, "parse sequence")
+  lu.assertEquals(p("x = 0,,"), {exp={tag="number", val=0}, id="x", tag="assign"}, "parse empty sequence")
+  exp = {
+    s1={exp={tag="number", val=0}, id="x", tag="assign"},
+    s2={exp={tag="number", val=0}, id="y", tag="assign"},
+    tag="seq"
+  }
+  lu.assertEquals(p("x = 0,,y = 0"), exp, "parse empty sequence")
+end
 
+
+function test_compile()
+  local frame = {vars = {}}
+  lang.compile(frame, lang.parse("x = 0"))
+  lu.assertEquals(frame.vars["x"], 1, "compile store code stores variable in frame")  
+--  lu.assertError(lang.compile(frame, lang.parse("y + 1")))
+end
 
 os.exit( lu.LuaUnit.run() )
