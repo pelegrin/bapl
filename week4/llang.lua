@@ -72,7 +72,7 @@ local function foldUn(lst)
 end
   
   local maxmatch = 0
-  local isCommentMode = false
+  local bCommentStarted = false
   local bCommentEnded = false
 -- return AST of Lazarus language  
   local loc = lpeg.locale()

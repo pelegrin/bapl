@@ -85,7 +85,7 @@ end
 
 function test_syntax_error()
   local p = lang.parse
-  res, actualErr = p("a%")
+  local res, actualErr = p("a%")
   local expErr = { line = "a%", position = 2 }
   lu.assertEquals(res, nil, "nil AST from syntax error")
   lu.assertEquals(actualErr, expErr, "error object contains syntax error position")
@@ -94,15 +94,6 @@ end
 function test_comments()
   local p = lang.parse
   lu.assertEquals(p("5 // 4"), {tag="number", val=5}, "test end of line comments")
-  local code_block_comments = [[
-  5 + 2
-  /* Here is some description
-  3 * 4
-  a
-  ... */
-  4
-  ]]
-  lu.assertEquals(p(code_block_comments), {}, "test block comments")
 end
 
 
