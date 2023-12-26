@@ -1,0 +1,174 @@
+#! /usr/bin/env lua
+
+local laz = require "llang"
+local ut = require "utils"
+
+function file_exists(path)
+  local file = io.open(path, "rb")
+  if file then file:close() end
+  return file ~= nil
+end
+
+function readall(filename)
+  local fh = io.open(filename, "rb")
+  local contents = fh:read(_VERSION <= "Lua 5.2" and "*a" or "a")
+  fh:close()
+  return contents
+end
+
+-- run Lazarus VM
+
+-- Lazarus reserved words
+local syscalls = { ["1"] = function (exp) print(tostring(exp)) end }
+
+local top = 0
+
+local isInteractive = arg[1] == "-i"
+local isDebug = #arg > 1 and arg[1] == "-debug" or isInteractive
+
+local function debug(f, msg)
+  return isDebug and f(msg)
+end
+
+local function tOf(b)
+  return b and 1 or 0
+end
+
+local function syntaxErrorHandler(err) 
+  local errMsg = ""
+  if err.position == 0 then 
+    errMsg = err.line .. " (beginig of line)"
+  else
+    errMsg = string.sub(err.line, 1, err.position -1) .. "["  .. string.sub(err.line, err.position, err.position + 1)  .. "]" .. " (at position: " .. err.position .. ")"
+  end
+
+  print("LZ1 Syntax error in line: " .. errMsg)
+  os.exit(1)
+end
+
+local function errorHandler(message, err)
+  print("LZ2 ".. tostring(message).. " \n" .. " ".. tostring(err) .."\n")
+  os.exit(2)
+end
+
+local function run(code, stack, mem)
+  local pc = 1
+  while pc <= #code do
+    if code[pc] == "push" then
+      pc = pc + 1
+      top = top + 1
+      stack[top] = code[pc]
+    elseif code[pc] == "load" then
+       pc = pc + 1
+       top = top + 1
+       stack[top] = mem[code[pc]]
+    elseif code[pc] == "store" then
+       pc = pc + 1
+       mem[code[pc]] = stack[top]
+       top = top - 1
+    elseif code[pc] == "syscall" then
+       pc = pc + 1        
+       opcode = code[pc]
+       syscalls[opcode](stack[top])
+    elseif code[pc] == "add" then
+      stack[top - 1] = stack[top - 1] + stack[top]
+      top = top - 1
+    elseif code[pc] == "sub" then
+      stack[top - 1] = stack[top - 1] - stack[top]
+      top = top - 1
+    elseif code[pc] == "mul" then
+      stack[top - 1] = stack[top - 1] * stack[top]
+      top = top - 1
+    elseif code[pc] == "div" then
+      stack[top - 1] = stack[top - 1] / stack[top]
+      top = top - 1
+     elseif code[pc] == "exp" then
+       stack[top - 1] = stack[top - 1] ^ stack[top]
+       top = top - 1
+     elseif code[pc] == "rem" then
+       stack[top - 1] = stack[top - 1] % stack[top]
+       top = top - 1  
+    elseif code[pc] == "lq" then
+       stack[top - 1] = tOf(stack[top - 1] <= stack[top])
+       top = top - 1  
+     elseif code[pc] == "gq" then
+       stack[top - 1] = tOf(stack[top - 1] >= stack[top])
+       top = top - 1  
+     elseif code[pc] == "eq" then
+       stack[top - 1] = tOf(stack[top - 1] == stack[top])
+       top = top - 1  
+     elseif code[pc] == "nq" then
+       stack[top - 1] = tOf(stack[top - 1] ~= stack[top])
+       top = top - 1  
+     elseif code[pc] == "lt" then
+       stack[top - 1] = tOf(stack[top - 1] < stack[top])
+       top = top - 1  
+     elseif code[pc] == "gt" then
+       stack[top - 1] = tOf(stack[top - 1] > stack[top])
+       top = top - 1    
+     elseif code[pc] == "dec" then
+       stack[top] = stack[top] - 1
+     elseif code[pc] == "inc" then
+       stack[top] = stack[top] + 1
+    elseif code[pc] == "minus" then
+       stack[top] = -stack[top]
+    else
+      error("LAZ0 unkown op code:" .. code[pc])
+    end    
+    pc = pc + 1
+  end
+end
+
+local function usage()
+  return "Usage: " .. arg[0] .. "[options] path/<source_file>"
+end
+
+local path = not isInteractive and arg[#arg] or #arg > 1 and table.concat(arg, " ", 2)
+
+if path == nil and not isInteractive then 
+  print(usage())
+  os.exit(1)
+end
+
+if not isInteractive and not file_exists(path) then
+  print ("LAZ1 file ".. path .. " not found")
+  os.exit(1)
+end
+
+
+local stack = {}
+local mem = {}
+local frame = {vars = {}}
+
+local fh = not isInteractive and io.open(path, "rb")
+local line = not isInteractive and fh:read("*line") or path or io.read()
+
+local l = 1
+while line do
+    local status, ast, err = pcall(laz.parse, line) 
+    if (err ~= nil) then syntaxErrorHandler(err) end
+    debug(print, "Parsing:" .. tostring(line))
+    debug(print, "AST")
+    debug(ut.printtable, ast)
+    status, code = pcall(laz.compile, frame, ast)
+    status = status or errorHandler("Compilation error in line: ".. l .. "\n" .. line, code)
+    debug(print, "Stack")
+    debug(ut.printtable,code)
+    status, err =  pcall(run, code, stack, mem)
+    status = status or errorHandler("VM error in line: ".. l .. "\n" .. line, err)
+    if not isInteractive then
+      line = fh:read("*line")
+      l = l + 1
+     else
+       line = io.read()
+    end
+end
+status = not isInteractive and fh:close()
+
+-- print stack
+debug(print, "Stack after calculations")
+debug(ut.printtable, stack)
+debug(print, "top: " .. tostring(top))
+
+
+
