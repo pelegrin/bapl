@@ -70,7 +70,7 @@ end
   local maxmatch = 0
 -- return AST of Lazarus language  
   local loc = lpeg.locale()
-  local space = loc.space^0 * lpeg.P(function (_, p)  maxmatch = p ;return true end)
+  local space = loc.space^0* lpeg.P(function (_, p)  maxmatch = p ;return true end)
   local sign = lpeg.S("-+")^-1
   local h = lpeg.S("aAbBcCdDeEfF") 
   local x = lpeg.S("xX")
@@ -115,7 +115,10 @@ end
   grammar = space * grammar * -1
 
 local function parse(input)
-  return grammar:match(input) or nil, {line = input, position = maxmatch - 1}
+  if input == nil or input == "" then return nil, nil end
+  local ast = grammar:match(input)
+  if ast == nil then return nil, {line = input, position = maxmatch - 1} end
+  return  ast, nil
 end
 
 --[[
@@ -190,7 +193,7 @@ end
 -- compile AST
 local function compile(frame, ast)
   local state = {code = {}}
-  codeStatement(frame, state, ast)
+  if ast ~= nil then codeStatement(frame, state, ast) end
   return state.code
 end
 

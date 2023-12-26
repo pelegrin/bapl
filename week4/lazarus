@@ -35,13 +35,14 @@ local function tOf(b)
 end
 
 local function syntaxErrorHandler(err) 
-  local positionMsg = ""
-  if err.position == 0 or err.position == #err.line then
-    positionMsg = err.line
+  local errMsg = ""
+  if err.position == 0 then 
+    errMsg = err.line .. " (beginig of line)"
   else
-  positionMsg = "["  .. string.sub(err.line, err.position, err.position)  .. "]".. string.sub(err.line, err.position + 1)
+    errMsg = string.sub(err.line, 1, err.position -1) .. "["  .. string.sub(err.line, err.position, err.position + 1)  .. "]" .. " (at position: " .. err.position .. ")"
   end
-  print("LZ1 Syntax error in line: " .. positionMsg .. " (at position: " .. err.position .. ")")
+
+  print("LZ1 Syntax error in line: " .. errMsg)
   os.exit(1)
 end
 
@@ -144,8 +145,8 @@ local line = not isInteractive and fh:read("*line") or path or io.read()
 
 local l = 1
 while line do
-    local status, ast, err = pcall(laz.parse, line)    
-    status = status and ast ~= nil or syntaxErrorHandler(err)    
+    local status, ast, err = pcall(laz.parse, line) 
+    if (err ~= nil) then syntaxErrorHandler(err) end
     debug(print, "Parsing:" .. tostring(line))
     debug(print, "AST")
     debug(ut.printtable, ast)
