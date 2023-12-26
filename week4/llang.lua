@@ -3,6 +3,10 @@ local ut = require "utils"
 
 local lang = {}
 
+local function I (msg)
+  return lpeg.P(function () print(msg); return true end)
+end
+
 local function valueOf(p)
   if not tostring(p):match("lpeg") then return nil end
   return lpeg.C(p)
@@ -68,9 +72,11 @@ local function foldUn(lst)
 end
   
   local maxmatch = 0
+  local bCommentStarted = false
+  local bCommentEnded = false
 -- return AST of Lazarus language  
   local loc = lpeg.locale()
-  local space = loc.space^0* lpeg.P(function (_, p)  maxmatch = p ;return true end)
+  local space = lpeg.V("space")
   local sign = lpeg.S("-+")^-1
   local h = lpeg.S("aAbBcCdDeEfF") 
   local x = lpeg.S("xX")
@@ -102,7 +108,11 @@ end
   local logic = lpeg.V("logic")
   local statement = lpeg.V("statement")
   local statements = lpeg.V("statements")
-  local grammar = lpeg.P({"statements",
+  local comments = "//" * (lpeg.P(1) - "\n")^0
+  local bcommentS = "/*" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentStarted = true; return true end)
+  local bcommentE = "*/" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentEnded = true; return true end)
+  local grammar = lpeg.P({"prog",
+  prog = space * bcommentS^-1 * bcommentE^-1 * statements * -1,    
   statements = space * lpeg.Ct(statement * (sep * (statement + ""))^0)/ foldSts,    
   statement = space * id * opAssign * logic /nodeAssign + pr*logic/nodeSys + logic,    
   primary = numerals + openP * logic * closingP + id,
@@ -110,13 +120,15 @@ end
   exponent = space * lpeg.Ct(unary * (opE * unary)^0) / foldBin,
   term = space * lpeg.Ct(exponent * (opM * exponent)^0) / foldBin,
   exp = space * lpeg.Ct(term * (opA * term)^0) / foldBin, 
-  logic = space * lpeg.Ct(exp * (opC * exp)^0) / foldBin
+  logic = space * lpeg.Ct(exp * (opC * exp)^0) / foldBin,
+  space = (loc.space + comments)^0 * lpeg.P(function (_, p)  maxmatch = p ;return true end)            
   })
-  grammar = space * grammar * -1
 
 local function parse(input)
   if input == nil or input == "" then return nil, nil end
   local ast = grammar:match(input)
+  if bCommentEnded then bCommentEnded = false; bCommentStarted = false; return nil, nil end
+  if bCommentStarted then return nil, nil end
   if ast == nil then return nil, {line = input, position = maxmatch - 1} end
   return  ast, nil
 end
