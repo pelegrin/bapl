@@ -3,14 +3,8 @@ local lang = require "llang"
 local lpeg = require "lpeg"
 local ut = require "utils"
 
-function test_valueOf()
-  local loc = lpeg.locale()
-  lu.assertEquals(lang.valueOf(loc.digit):match("5"), "5", "capture a digit")
-  lu.assertEquals(lang.valueOf("some string"), nil, "accepts lpeg pattern as input")
-end
-
 function test_parse()
-  local p = lang.parse
+  local p = lang._parse
   lu.assertEquals(p(""), nil, "parse empty string")
   lu.assertEquals(p("0XFF"), {tag = "number", val=255}, "parse a hexadecimal number")
   lu.assertEquals(p("-0X1B  "), {e1={tag="number", val=27}, op="-", tag="unop"}, "parse a negative hexadecimal number")
@@ -31,7 +25,7 @@ function test_parse()
 end
 
 function test_varRef()
-  local p = lang.parse
+  local p = lang._parse
   lu.assertEquals(p("a"), {tag = "var", val = "a"}, "parse a single variable")
   lu.assertEquals(p("_a"), {tag = "var", val = "_a"}, "parse an underscore variable")
   lu.assertEquals(p("__a"), {tag = "var", val = "__a"}, "parse underscore underscore variable")
@@ -55,7 +49,7 @@ function test_varRef()
 end
 
 function test_sequence()
-  local p = lang.parse
+  local p = lang._parse
   local exp = {
     s1={
         s1={exp={tag="number", val=0}, id="x", tag="assign"},
@@ -77,14 +71,17 @@ end
 
 
 function test_compile()
-  local frame = {vars = {}}
-  lang.compile(frame, lang.parse("x = 0"))
-  lu.assertEquals(frame.vars["x"], 1, "compile store code stores variable in frame")  
---  lu.assertError(lang.compile(frame, lang.parse("y + 1")))
+  local ip = lang.Interpreter()
+  local l = ip.compile("x = 0 ")
+  lu.assertEquals(#l, 4, "compile store code returns not empty list")
+  lu.assertEquals(l[1], "push", "compile store code")
+  lu.assertEquals(l[2], 0, "compile store code")
+  lu.assertEquals(l[3], "store", "compile store code")
+  lu.assertEquals(l[4], 1, "compile store code")
 end
 
 function test_syntax_error()
-  local p = lang.parse
+  local p = lang._parse
   local res, actualErr = p("a%")
   local expErr = { line = "a%", position = 2 }
   lu.assertEquals(res, nil, "nil AST from syntax error")
@@ -92,7 +89,7 @@ function test_syntax_error()
 end
 
 function test_comments()
-  local p = lang.parse
+  local p = lang._parse
   lu.assertEquals(p("5 // 4"), {tag="number", val=5}, "test end of line comments")
 end
 
