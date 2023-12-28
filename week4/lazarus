@@ -23,9 +23,10 @@ end
 
 
 local fh = not isInteractive and io.open(path, "rb")
-local line = not isInteractive and fh:read("*line") or path or io.read()
 
 local l = 1
+local line = not isInteractive and fh:read("*line") or io.stdout:write(string.format("%d > ", l)) and io.read()
+
 local d = ut.Debug(isDebug)
 local ip = laz.Interpreter()
 local vm = laz.VM()
@@ -46,6 +47,8 @@ while line do
        vm.printStack()
        d.debug(print, "Memory")
        vm.printMemory()
+       l = l + 1
+       io.stdout:write(string.format("%d > ", l))
        line = io.read()
     end
 end
