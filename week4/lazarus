@@ -42,6 +42,8 @@ while line do
      else
        d.debug(print, "Stack after calculations")
        vm.printStack()
+       d.debug(print, "Memory")
+       vm.printMemory()
        line = io.read()
     end
 end
@@ -49,4 +51,8 @@ status = not isInteractive and fh:close()
 
 -- print stack
 d.debug(print, "Stack after calculations")
-if isDebug then vm.printStack() end
+if isDebug then
+  vm.printStack() 
+  d.debug(print, "Memory")
+  vm.printMemory()
+end

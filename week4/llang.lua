@@ -133,6 +133,7 @@ local ops = {["+"] = "add", ["-"] = "sub",
 
 local function Interpreter(v)
   local vars = v or {}
+  local nvars = v and #v or 0
   local list = ut.List()
   
   local function parse(input)
@@ -143,7 +144,7 @@ local function Interpreter(v)
     if ast == nil then return nil, {line = input, position = maxmatch - 1} end
     return  ast, nil
   end
-  
+    
   local function addCode(op)
     list.add(op)
   end
@@ -157,8 +158,9 @@ local function Interpreter(v)
   local function store(id)
     local num = vars[id]
     if not num then
-      num = #vars + 1
+      num = nvars + 1
       vars[id] = num
+      nvars = num
     end  
     return num
   end
@@ -325,10 +327,15 @@ local function VM()
   local function printStack()
     stack.printStack()
   end
+  
+  local function printMemory()
+    ut.printtable(mem)
+  end
     
   return {
       run = run,
-      printStack = printStack
+      printStack = printStack,
+      printMemory = printMemory
   }
 end
 
