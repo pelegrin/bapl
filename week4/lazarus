@@ -4,14 +4,14 @@ local laz = require "llang"
 local ut = require "utils"
 
 local function usage()
-  return "Usage: " .. arg[0] .. "[options] path/<source_file>"
+  return "Usage: " .. arg[0] .. " [options] path/<source_file> | ".. arg[0] .. " -i (for interactive mode)"
 end
 
 local isInteractive = arg[1] == "-i"
 local isDebug = #arg > 1 and arg[1] == "-debug" or isInteractive
-local path = not isInteractive and arg[#arg] or #arg > 1 and table.concat(arg, " ", 2)
+local path = not isInteractive and #arg > 0 and arg[#arg] or #arg > 1 and table.concat(arg, " ", 2)
 
-if path == nil and not isInteractive then 
+if not path and not isInteractive then 
   print(usage())
   os.exit(1)
 end
@@ -31,11 +31,13 @@ local ip = laz.Interpreter()
 local vm = laz.VM()
 
 while line do    
-    local codeList = ip.compile(line)
+    local codeList, err = ip.compile(line)
+    if err and not isInteractive then os.exit(1) end
     d.debug(print, "Code List")
     d.debug(ut.printtable, codeList)
     status, err =  pcall(vm.run, codeList)
     status = status or ut.errorHandler("VM error in line: ".. l .. "\n" .. line, err)
+    if not status and not isInteractive then os.exit(1) end
     if not isInteractive then
       line = fh:read("*line")
       l = l + 1
@@ -50,8 +52,8 @@ end
 status = not isInteractive and fh:close()
 
 -- print stack
-d.debug(print, "Stack after calculations")
-if isDebug then
+if not isInteractive and isDebug then
+  d.debug(print, "Stack after calculations")
   vm.printStack() 
   d.debug(print, "Memory")
   vm.printMemory()
