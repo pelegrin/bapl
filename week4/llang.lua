@@ -89,6 +89,14 @@ local decimals = loc.digit^1 / number * (-x) * space
 local hexes = "0" * x * lpeg.C((h + loc.digit)^1) / hex * space
 local numerals = hexes + scientific + floats + decimals
 
+local reserved = {"return", "if", "do", "done", "while", "for"}
+function Rw(id)
+  for _, r in ipairs(reserved) do
+    if id == r then return true end    
+  end  
+  return false
+end
+
 local opA = lpeg.C(lpeg.S("+-")) * space
 local opM = lpeg.C(lpeg.S("*/%")) * space
 local opE = lpeg.C(lpeg.S("^")) * space  
@@ -128,8 +136,7 @@ local ops = {["+"] = "add", ["-"] = "sub",
              ["*"] = "mul", ["/"] = "div", ["^"] = "exp", ["%"] = "rem",
              ["<="] = "lq", [">="] = "gq", ["=="] = "eq", ["!="] = "nq", ["<"] = "lt", [">"] = "gt",
              ["--"] = "dec", ["++"] = "inc", ["-"] = "minus"
-             }
-           
+             }           
 
 local function Interpreter(v)
   local vars = v or {}
@@ -150,6 +157,7 @@ local function Interpreter(v)
   end
 
   local function getVar(id)
+    if Rw(id) then error("Variable "..tostring(id) .. " is a reserved word") end
     local num = vars[id]
     if not num then error("Undefined variable " ..tostring(id)) end
     return num
@@ -205,20 +213,10 @@ local function Interpreter(v)
     end    
   end
 
-  local function syntaxErrorHandler(err) 
-    local errMsg = ""
-    if err.position == 0 then 
-      errMsg = err.line .. " (beginig of line)"
-    else
-      errMsg = string.sub(err.line, 1, err.position -1) .. "["  .. string.sub(err.line, err.position, err.position + 1)  .. "]" .. " (at position: " .. err.position .. ")"
-    end
-    print("LZ1 Syntax error in line: " .. errMsg)
-  end
-
   local function compile(line)
     list = ut.List()
     local status, ast, err = pcall(parse, line)
-    if (err ~= nil) then syntaxErrorHandler(err); return {}, err end
+    if (err ~= nil) then ut.syntaxErrorHandler(err); return {}, err end
     if ast ~= nil then
           status, err = pcall(codeStatement, ast)
           if not status then ut.errorHandler("Compilation error in line: ".. line .. "\n" ..err); return {}, err end
