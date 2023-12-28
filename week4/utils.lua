@@ -26,6 +26,15 @@ local function errorHandler(message, err)
   print("LZ2 ".. tostring(message).. " \n" .. " ".. tostring(err) .."\n")
 end
 
+local function syntaxErrorHandler(err) 
+  local errMsg = ""
+  if err.position == 0 then 
+    errMsg = err.line .. " (beginig of line)"
+  else
+    errMsg = string.sub(err.line, 1, err.position -1) .. "["  .. string.sub(err.line, err.position, err.position + 1)  .. "]" .. " (at position: " .. err.position .. ")"
+  end
+  print("LZ1 Syntax error in line: " .. errMsg)
+end
 
 function Stack()
   local self = {_ptr = 0}
@@ -116,6 +125,7 @@ Utils.printt = printt
 Utils.Stack = Stack
 Utils.List = List
 Utils.errorHandler = errorHandler
+Utils.syntaxErrorHandler = syntaxErrorHandler
 Utils.Debug = Debug
 Utils.fileExists = fileExists
 

@@ -1,3 +1,4 @@
+
 # Environment
 
 ## Prerequisites (to change)
@@ -36,3 +37,19 @@ Supported *decrement, increment, unary minus.* (--, ++, -) in infix notation.
 ### Logical operators
 Lazarus provides the following relational operators.
 `< > <= >= == !=`
+
+## Identifiers
+
+An identifier is a sequence of letters and digits. The first character must be a letter, the underscore _ counts as a letter. Upper and lower case letters are different. Identifiers may have any length.
+
+## Comments
+Line starting with  /* introduces a block comment, which terminates with the characters */ started with new line. 
+Characters  // introduce a comment terminated with end of line.
+
+## System functions
+Print an expression
+> @ [expression]
+
+## Reserved words
+> "return", "if", "do", "done", "while", "for"
+ 
