@@ -213,16 +213,15 @@ local function Interpreter(v)
       errMsg = string.sub(err.line, 1, err.position -1) .. "["  .. string.sub(err.line, err.position, err.position + 1)  .. "]" .. " (at position: " .. err.position .. ")"
     end
     print("LZ1 Syntax error in line: " .. errMsg)
-    os.exit(1)
   end
 
   local function compile(line)
     list = ut.List()
     local status, ast, err = pcall(parse, line)
-    if (err ~= nil) then syntaxErrorHandler(err) end
+    if (err ~= nil) then syntaxErrorHandler(err); return {}, err end
     if ast ~= nil then
           status, err = pcall(codeStatement, ast)
-          status = status or ut.errorHandler("Compilation error in line: ".. line .. "\n" ..err)
+          if not status then ut.errorHandler("Compilation error in line: ".. line .. "\n" ..err); return {}, err end
     end
     return list.getAll()
   end

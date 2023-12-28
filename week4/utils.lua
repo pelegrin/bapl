@@ -24,7 +24,6 @@ end
 
 local function errorHandler(message, err)
   print("LZ2 ".. tostring(message).. " \n" .. " ".. tostring(err) .."\n")
-  os.exit(2)
 end
 
 
