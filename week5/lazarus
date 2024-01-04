@@ -1,0 +1,63 @@
+#! /usr/bin/env lua
+
+local laz = require "llang"
+local ut = require "utils"
+
+local function usage()
+  return "Usage: " .. arg[0] .. " [options] path/<source_file> | ".. arg[0] .. " -i (for interactive mode)"
+end
+
+local isInteractive = arg[1] == "-i"
+local isDebug = #arg > 1 and arg[1] == "-debug" or isInteractive
+local path = not isInteractive and #arg > 0 and arg[#arg] or #arg > 1 and table.concat(arg, " ", 2)
+
+if not path and not isInteractive then 
+  print(usage())
+  os.exit(1)
+end
+
+if not isInteractive and not ut.fileExists(path) then
+  print ("LAZ1 file ".. path .. " not found")
+  os.exit(1)
+end
+
+
+local fh = not isInteractive and io.open(path, "rb")
+
+local l = 1
+local line = not isInteractive and fh:read("*line") or io.stdout:write(string.format("%d > ", l)) and io.read()
+
+local d = ut.Debug(isDebug)
+local ip = laz.Interpreter()
+local vm = laz.VM()
+
+while line do    
+    local codeList, err = ip.compile(line)
+    if err and not isInteractive then os.exit(1) end
+    d.debug(print, "Code List")
+    d.debug(ut.printtable, codeList)
+    status, err =  pcall(vm.run, codeList)
+    status = status or ut.errorHandler("VM error in line: ".. l .. "\n" .. line, err)
+    if not status and not isInteractive then os.exit(1) end
+    if not isInteractive then
+      line = fh:read("*line")
+      l = l + 1
+     else
+       d.debug(print, "Stack after calculations")
+       vm.printStack()
+       d.debug(print, "Memory")
+       vm.printMemory()
+       l = l + 1
+       io.stdout:write(string.format("%d > ", l))
+       line = io.read()
+    end
+end
+status = not isInteractive and fh:close()
+
+-- print stack
+if not isInteractive and isDebug then
+  d.debug(print, "Stack after calculations")
+  vm.printStack() 
+  d.debug(print, "Memory")
+  vm.printMemory()
+end
