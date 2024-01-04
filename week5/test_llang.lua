@@ -34,16 +34,16 @@ function test_varRef()
   lu.assertEquals(p("1a"), nil, "parse incorrect variable")
   lu.assertEquals(p("$a"), {tag = "ref", val = "a"}, "parse a reference")
   lu.assertEquals(p("a + b"), {e1={tag="var", val="a"}, e2={tag="var", val="b"}, op="+", tag="binop"}, "parse a variable exp")
-  lu.assertEquals(p(" a = 0"), {exp={tag = "number", val = 0}, id="a", tag="assign"}, "parse a variable exp")
+  lu.assertEquals(p(" a = 0"), {exp={tag="number", val=0}, id={tag="var", val="a"}, tag="assign"}, "parse a variable exp")
   local exp = {
     exp={e1={tag="var", val="a"}, e2={tag="var", val="b"}, op="+", tag="binop"},
-    id="c",
+    id={tag="var", val="c"},
     tag="assign"
   }  
  lu.assertEquals(p(" c = a + b"), exp, "parse assignment expression")   
  local exp2 = {
     exp={e1={tag="number", val=1}, e2={tag="number", val=3}, op="*", tag="binop"},
-    id="a",
+    id={tag="var", val="a"},
     tag="assign"
   }   
  lu.assertEquals(p("a = 1 * 3"), exp2, "parse multiplication expression")
@@ -53,18 +53,18 @@ function test_sequence()
   local p = lang._parse
   local exp = {
     s1={
-        s1={exp={tag="number", val=0}, id="x", tag="assign"},
-        s2={exp={tag="number", val=0}, id="y", tag="assign"},
+        s1={exp={tag="number", val=0}, id={tag="var", val="x"}, tag="assign"},
+        s2={exp={tag="number", val=0}, id={tag="var", val="y"}, tag="assign"},
         tag="seq"
     },
-    s2={exp={tag="number", val=1}, id="z", tag="assign"},
+    s2={exp={tag="number", val=1}, id={tag="var", val="z"}, tag="assign"},
     tag="seq"
   }
   lu.assertEquals(p("x = 0, y = 0, z = 1"), exp, "parse sequence")
-  lu.assertEquals(p("x = 0,,"), {exp={tag="number", val=0}, id="x", tag="assign"}, "parse empty sequence")
+  lu.assertEquals(p("x = 0,,"), {exp={tag="number", val=0}, id={tag="var", val="x"}, tag="assign"}, "parse empty sequence")
   exp = {
-    s1={exp={tag="number", val=0}, id="x", tag="assign"},
-    s2={exp={tag="number", val=0}, id="y", tag="assign"},
+    s1={exp={tag="number", val=0}, id={tag="var", val="x"}, tag="assign"},
+    s2={exp={tag="number", val=0}, id={tag="var", val="y"}, tag="assign"},
     tag="seq"
   }
   lu.assertEquals(p("x = 0,,y = 0"), exp, "parse empty sequence")

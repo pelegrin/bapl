@@ -10,33 +10,22 @@ local function I (msg)
 end
 --]]
 
-local function nodeAssign(id, exp)
-  return {tag = "assign", id = id.val, exp = exp}
-end
-
-
-local function nodeVar(v)
-  return {tag = "var", val = v}
-end
-
-local function nodeRef(r)
-  return {tag = "ref", val = r}
+local function node(tag, ...)
+  local labels = table.pack(...)
+  return function (...)
+    local params = table.pack(...)
+    local t = { tag = tag}
+    for i, v in ipairs(labels) do t[v] = params[i] end    
+    return t
+  end  
 end
 
 local function nodeSys(exp)
   return {tag = "sys", code = "1", exp = exp}
 end
 
-local function nodeNum(num)
-  return {tag = "number", val = num}
-end
-
-local function number(n)
-  return nodeNum(tonumber(n))
-end
-
 local function hex(n)  
-  return nodeNum(tonumber(n, 16))
+  return tonumber(n, 16)
 end
 
 -- Convert a list {n1, "+", n2, "+", n3, ...} into a tree
@@ -83,10 +72,10 @@ local x = lpeg.S("xX")
 local sym = lpeg.R("az", "AZ")
 
 -- numericals
-local floats = loc.digit^1 * "." * loc.digit^1 / number * space
-local scientific = loc.digit^1* ("." * loc.digit^1 + loc.digit^0 )* lpeg.S("eE") * lpeg.P("-")^0 * loc.digit^1 / number * space
-local decimals = loc.digit^1 / number * (-x) * space
-local hexes = "0" * x * lpeg.C((h + loc.digit)^1) / hex * space
+local floats = loc.digit^1 * "." * loc.digit^1 / tonumber / node("number", "val") * space
+local scientific = loc.digit^1* ("." * loc.digit^1 + loc.digit^0 )* lpeg.S("eE") * lpeg.P("-")^0 * loc.digit^1 / tonumber / node("number", "val") * space
+local decimals = loc.digit^1 / tonumber / node("number", "val") * (-x) * space
+local hexes = "0" * x * lpeg.C((h + loc.digit)^1) / hex / node("number", "val") * space
 local numerals = hexes + scientific + floats + decimals
 
 local reserved = {"return", "if", "do", "done", "while", "for"}
@@ -102,8 +91,8 @@ local opM = lpeg.C(lpeg.S("*/%")) * space
 local opE = lpeg.C(lpeg.S("^")) * space  
 local opC = lpeg.C(lpeg.P("<=") + ">=" + "==" + "!=" + "<" + ">") * space
 local opUn = lpeg.C(lpeg.P("--") + "++" + "-" + "+" + "!")
-local variable = (sym^1 + T"_" * T"_"^-1 * sym^1) * loc.alnum^0 / nodeVar * space
-local ref = lpeg.S("$") * (sym^1 * loc.alnum^0 / nodeRef) * space
+local variable = (sym^1 + T"_" * T"_"^-1 * sym^1) * loc.alnum^0 / node("var", "val") * space
+local ref = lpeg.S("$") * (sym^1 * loc.alnum^0 / node("ref", "val") ) * space
 local id = variable + ref
 local pr = space * lpeg.P("@")
 local unary = lpeg.V("unary")
@@ -122,7 +111,7 @@ local bcommentE = "*/" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentEnded = tr
 local grammar = lpeg.P({"prog",
   prog = space * bcommentS^-1 * bcommentE^-1 * statements * -1,    
   statements = space * lpeg.Ct(statement * (T"," * (statement + ""))^0)/ foldSts,    
-  statement = space * id * T"=" * logic /nodeAssign + pr * logic/nodeSys + logic,    
+  statement = space * id * T"=" * logic / node("assign", "id", "exp") + pr * logic/nodeSys + logic,    
   primary = numerals + T"(" * logic * T")" + id,
   unary = space * lpeg.Ct(opUn * primary) /foldUn + primary,    
   exponent = space * lpeg.Ct(unary * (opE * unary)^0) / foldBin,
@@ -200,7 +189,7 @@ local function Interpreter(v)
     if ast.tag == "assign" then
       codeExp(ast.exp)
       addCode("store")
-      addCode(store(ast.id))    
+      addCode(store(ast.id.val))    
     elseif ast.tag == "seq" then
       if ast.s2 == nil then return codeStatement(ast.s1) end
       codeStatement(ast.s1)
