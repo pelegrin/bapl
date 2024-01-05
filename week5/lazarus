@@ -9,7 +9,7 @@ end
 
 local isInteractive = arg[1] == "-i"
 local isCompile = arg[1] == "-c"
-local isDebug = #arg > 1 and arg[1] == "-debug" or isInteractive
+local isDebug = #arg > 1 and arg[1] == "-debug" or arg[1] == "-d" or isInteractive
 local path = not isInteractive and #arg > 0 and arg[#arg] or #arg > 1 and table.concat(arg, " ", 2)
 
 if not path and not isInteractive then 
@@ -29,8 +29,8 @@ end
 
 
 local d = ut.Debug(isDebug)
-local ip = laz.Interpreter()
-local vm = laz.VM()
+local ip = laz.Interpreter(nil, isDebug)
+local vm = laz.VM(isDebug)
 
 if not isInteractive then
   local code = ip.interpretf(path)
