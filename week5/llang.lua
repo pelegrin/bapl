@@ -107,7 +107,7 @@ local decimals = loc.digit^1 / tonumber / node("number", "val") * (-x) * space
 local hexes = "0" * x * lpeg.C((h + loc.digit)^1) / hex / node("number", "val") * space
 local numerals = hexes + scientific + floats + decimals
 
-local reserved = {"return", "if", "do", "done", "while", "for"}
+local reserved = {"return", "if", "end", "while", "for", "else", "elseif"}
 
 local function Rw(id)
   for _, r in ipairs(reserved) do
@@ -144,7 +144,7 @@ local bcontrolE = space * "end" * space * lpeg.P(function(_,_) bControlEnded = t
 local grammar = lpeg.P({"prog",
   prog = space * bcommentS^-1 * bcommentE^-1 * statements * -1,    
   statements = space * lpeg.Ct(statement * (T"," * (statement + ""))^0)/ foldSts,    
-  statement = bcontrolS * logic / node("if", "cond") + bcontrolE/node("end") + space * id * T"=" * logic / node("assign", "id", "exp") + pr * logic/nodeSys + logic,    
+  statement = T"if" * logic / node("if", "cond") + T"elseif" * logic / node("elseif", "cond") + T"else"/ node("else") + T"end"/node("end") + space * id * T"=" * logic / node("assign", "id", "exp") + pr * logic/nodeSys + logic,    
   primary = numerals + T"(" * logic * T")" + id,
   unary = space * lpeg.Ct(opUn * primary) /foldUn + primary,    
   exponent = space * lpeg.Ct(unary * (opE * unary)^0) / foldBin,
@@ -160,15 +160,19 @@ local ops = {["+"] = "add", ["-"] = "sub",
              ["--"] = "dec", ["++"] = "inc", ["-"] = "minus", ["!"] = "not"
              }           
 
-local function Interpreter(v)
+local function Interpreter(v, debug)
   local vars = v or {}
   local nvars = v and #v or 0
   local list = ut.List()
   local jmpAddress = ut.List()
+  local isDebug = debug or false
+  local d = ut.Debug(isDebug)
+
   
   -- fix element in list at position stored in the end of jmpAddress with dif with address o
   local function fixAddress(o)
     local adr = jmpAddress.removeLast()
+    if adr == nil then error("Closing control statement without begining") end
     o = o - adr
     list.replace(o, adr)
   end  
@@ -242,8 +246,20 @@ local function Interpreter(v)
     elseif ast.tag == "if" then
       codeExp(ast.cond)
       addCode("jmpz")
-      addCode(0) -- jump address to fix in file mode, not fixable in interactive mode
+      addCode(0) -- jump address to fix 
       jmpAddress.add(list.elems())
+    elseif ast.tag == "elseif" then
+      fixAddress(list.elems()) -- jump just before condition execution
+      codeExp(ast.cond)
+      addCode("jmpz")
+      addCode(0) -- jump address to fix 
+      jmpAddress.add(list.elems())
+    elseif ast.tag == "else" then
+      addCode("jmp")
+      addCode(0)
+      local adr = list.elems()
+      fixAddress(adr)
+      jmpAddress.add(adr)
     elseif ast.tag == "end" then
       addCode("noop")
       fixAddress(list.elems()) 
@@ -256,10 +272,11 @@ local function Interpreter(v)
     local status, ast, err = pcall(parse, line)
     if (err ~= nil) then ut.syntaxErrorHandler(err); return {}, err end
     if ast ~= nil then
+          d.debug(print, "AST\n")
+          d.debug(ut.printtable, ast)
           status, err = pcall(codeStatement, ast)
           if not status then
             ut.errorHandler("Compilation error in line: ".. line .. "\n" ..err)
-            ut.printtable(ast)
             return {}, err
           end
     end
@@ -271,22 +288,23 @@ local function Interpreter(v)
     
     local fh = io.open(path, "rb")
     local l = 1
-    local line = fh:read("*line")
-    
+    local line = fh:read("*line")    
     while line do 
       local status, ast, err = pcall(parse, line)
       if (err ~= nil) then ut.syntaxErrorHandler(err); return {}, err end
       if ast ~= nil then
+          d.debug(print, "AST line: ".. l .."\n")
+          d.debug(ut.printtable, ast)
           status, err = pcall(codeStatement, ast)
           if not status then
-            ut.errorHandler("Compilation error in line: ".. line .. "\n" ..err)
-            ut.printtable(ast)
+            ut.errorHandler("Compilation error in line ".. l .. ": " .. line .. "\n" .. err)
             return {}, err
           end          
       end
       l = l + 1
       line = fh:read("*line")
     end
+    if jmpAddress.elems() > 0 then error("Control statement without end") end
     fh:close()
     return list.getAll()
   end
@@ -312,7 +330,7 @@ local function Compiler()
     local savepath = string.gsub(path, ".lz$", ".lzc")
     local ip = Interpreter()
     local buffer = ip.interpretf(path)
-    ut.printtable(buffer)
+    if buffer ~= nil then ut.printtable(buffer) end
     --[[
     local fc = io.open(savepath, "wb")
     for _v in ipairs(buffer) do
@@ -329,12 +347,15 @@ local function Compiler()
 end
 
 
-local function VM()
+local function VM(debug)
   -- Lazarus reserved words
   local syscalls = { ["1"] = function (exp) print(tostring(exp)) end }
   -- internal data structures
   local stack = ut.Stack()
   local mem = {}
+  local isDebug = debug or false
+  local d = ut.Debug(isDebug)
+
   
   local function tOf(b)
     return b and 1 or 0
@@ -348,6 +369,7 @@ local function VM()
   local function run(code)
     local pc = 1
     while pc <= #code do
+      d.debug(stack.printStack)
       if code[pc] == "push" then
         pc = pc + 1
         stack.push(code[pc])
@@ -424,6 +446,10 @@ local function VM()
         local jmpDelta = code[pc]
         local cond = stack.pop()
         if (cond == 0 or nil) then pc = pc + jmpDelta end
+      elseif code[pc] == "jmp" then
+        pc = pc + 1
+        local jmpDelta = code[pc]
+        pc = pc + jmpDelta
       elseif code[pc] == "noop" then
         -- do nothing
       else
@@ -444,7 +470,8 @@ local function VM()
   return {
       run = run,
       printStack = printStack,
-      printMemory = printMemory
+      printMemory = printMemory,
+      _tOf = tOf -- for tests
   }
 end
 

@@ -112,6 +112,11 @@ function test_comments()
   lu.assertEquals(p("5 // 4"), {tag="number", val=5}, "test end of line comments")
 end
 
-
+function test_true_false()
+  local vm = lang.VM()
+  lu.assertEquals(vm._tOf(1 < 2), 1, " 1 < 2")
+  lu.assertEquals(vm._tOf(2 > 1), 1, " 2 > 1")
+  lu.assertEquals(vm._tOf(2 > 6), 0, " 2 > 6")
+end
 
 os.exit( lu.LuaUnit.run() )

@@ -5,9 +5,11 @@ x = 0
 y = 5
 if x < 3
 x = x + 1
+else 
+x = x + 2
+end
 if y > 6
 @y
-end
 @x
 end
-@x
+@x // output should be 1
