@@ -85,13 +85,25 @@ function List()
   
   local function getAll()
     return l
+  end  
+  
+  local function replace(o, i)
+    l[i] = o
+  end
+  
+  local function removeLast()
+    local r = l[#l]
+    l[#l] = nil
+    return r
   end
   
   return {
     get = get,
     add = add,
     elems = elems,
-    getAll = getAll
+    getAll = getAll,
+    replace = replace,
+    removeLast = removeLast
   }
 end
 

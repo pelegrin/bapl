@@ -71,15 +71,33 @@ function test_sequence()
 end
 
 
-function test_compile()
+function test_compile_assignment()
   local ip = lang.Interpreter()
-  local l = ip.compile("x = 0 ")
-  lu.assertEquals(#l, 4, "compile store code returns not empty list")
-  lu.assertEquals(l[1], "push", "compile store code")
-  lu.assertEquals(l[2], 0, "compile store code")
+  local l = ip.interpret("x = 0 ")
+  lu.assertEquals(#l, 4, "compile assignment returns not empty list")
+  lu.assertEquals(l[1], "push", "compile push code")
+  lu.assertEquals(l[2], 0, "compile constant 0")
   lu.assertEquals(l[3], "store", "compile store code")
-  lu.assertEquals(l[4], 1, "compile store code")
+  lu.assertEquals(l[4], 1, "compile constant 1")
 end
+
+function test_compile_if()
+  local ip = lang.Interpreter()
+  local l = ip.interpret("x = 0, if x < 3 ")
+  lu.assertEquals(#l, 11, "compile assignment and if statement")
+  lu.assertEquals(l[1], "push", "compile push code")
+  lu.assertEquals(l[2], 0, "compile constant 0")
+  lu.assertEquals(l[3], "store", "compile store code")
+  lu.assertEquals(l[4], 1, "compile constant 1")
+  lu.assertEquals(l[5], "load", "compile x < 3")
+  lu.assertEquals(l[6], 1, "compile x < 3")
+  lu.assertEquals(l[7], "push", "compile x < 3")
+  lu.assertEquals(l[8], 3, "compile x < 3")
+  lu.assertEquals(l[9], "lt", "compile x < 3")
+  lu.assertEquals(l[10], "jmpz", "compile if")
+  lu.assertEquals(l[11], 0, "not fixable address in interactive mode")
+end
+
 
 function test_syntax_error()
   local p = lang._parse
