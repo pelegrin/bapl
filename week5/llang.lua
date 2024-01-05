@@ -3,6 +3,32 @@ local ut = require "utils"
 
 local lang = {}
 
+local opCode = { ['push'] =    0x01,
+  ['load'] =    0x02,
+  ['store'] =   0x03,
+  ['syscall'] = 0x04,
+  ['getglobal'] = 0x05,
+  ['setglobal'] = 0x06,
+  ---
+  ['add'] =   0x10,
+  ['sub'] =   0x11,
+  ['mul'] =   0x12,
+  ['div'] =   0x13,
+  ['exp'] =   0x14,
+  ['rem'] =   0x15,
+  ['lq'] =    0x16,
+  ['gq'] =    0x17,
+  ['eq'] =    0x18,
+  ['nq'] =    0x19,
+  ['lt'] =    0x1A,
+  ['gt'] =    0x1B,
+  ['dec'] =   0x1C,
+  ['inc'] =   0x1D,
+  ['minus'] = 0x1E,
+  ['not'] =   0x1F  
+}
+
+
 --[[
 -- LPeg Debug function
 local function I (msg)
@@ -64,6 +90,9 @@ local maxmatch = 0
 local bCommentStarted = false
 local bCommentEnded = false
 
+local bControlStarted = false
+local bControlEnded = false
+
 local loc = lpeg.locale()
 
 local sign = lpeg.S("-+")^-1
@@ -79,7 +108,8 @@ local hexes = "0" * x * lpeg.C((h + loc.digit)^1) / hex / node("number", "val") 
 local numerals = hexes + scientific + floats + decimals
 
 local reserved = {"return", "if", "do", "done", "while", "for"}
-function Rw(id)
+
+local function Rw(id)
   for _, r in ipairs(reserved) do
     if id == r then return true end    
   end  
@@ -108,10 +138,13 @@ local comments = "//" * (lpeg.P(1) - "\n")^0
 local bcommentS = "/*" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentStarted = true; return true end)
 local bcommentE = "*/" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentEnded = true; return true end)
 
+local bcontrolS = space * "if" * space * lpeg.P(function(_,_) bControlStarted = true; return true end)
+local bcontrolE = space * "end" * space * lpeg.P(function(_,_) bControlEnded = true; return true end)
+
 local grammar = lpeg.P({"prog",
   prog = space * bcommentS^-1 * bcommentE^-1 * statements * -1,    
   statements = space * lpeg.Ct(statement * (T"," * (statement + ""))^0)/ foldSts,    
-  statement = space * id * T"=" * logic / node("assign", "id", "exp") + pr * logic/nodeSys + logic,    
+  statement = bcontrolS * logic / node("if", "cond") + bcontrolE/node("end") + space * id * T"=" * logic / node("assign", "id", "exp") + pr * logic/nodeSys + logic,    
   primary = numerals + T"(" * logic * T")" + id,
   unary = space * lpeg.Ct(opUn * primary) /foldUn + primary,    
   exponent = space * lpeg.Ct(unary * (opE * unary)^0) / foldBin,
@@ -131,6 +164,14 @@ local function Interpreter(v)
   local vars = v or {}
   local nvars = v and #v or 0
   local list = ut.List()
+  local jmpAddress = ut.List()
+  
+  -- fix element in list at position stored in the end of jmpAddress with dif with address o
+  local function fixAddress(o)
+    local adr = jmpAddress.removeLast()
+    o = o - adr
+    list.replace(o, adr)
+  end  
   
   local function parse(input)
     if input == nil or input == "" then return nil, nil end
@@ -198,26 +239,95 @@ local function Interpreter(v)
       codeExp(ast.exp)
       addCode("syscall")
       addCode(ast.code)
+    elseif ast.tag == "if" then
+      codeExp(ast.cond)
+      addCode("jmpz")
+      addCode(0) -- jump address to fix in file mode, not fixable in interactive mode
+      jmpAddress.add(list.elems())
+    elseif ast.tag == "end" then
+      addCode("noop")
+      fixAddress(list.elems()) 
     else codeExp(ast)
     end    
   end
 
-  local function compile(line)
+  local function interpret(line)
     list = ut.List()
     local status, ast, err = pcall(parse, line)
     if (err ~= nil) then ut.syntaxErrorHandler(err); return {}, err end
     if ast ~= nil then
           status, err = pcall(codeStatement, ast)
-          if not status then ut.errorHandler("Compilation error in line: ".. line .. "\n" ..err); return {}, err end
+          if not status then
+            ut.errorHandler("Compilation error in line: ".. line .. "\n" ..err)
+            ut.printtable(ast)
+            return {}, err
+          end
     end
     return list.getAll()
-  end
+  end    
+  
+  local function interpretf(path)
+    list = ut.List()
     
+    local fh = io.open(path, "rb")
+    local l = 1
+    local line = fh:read("*line")
+    
+    while line do 
+      local status, ast, err = pcall(parse, line)
+      if (err ~= nil) then ut.syntaxErrorHandler(err); return {}, err end
+      if ast ~= nil then
+          status, err = pcall(codeStatement, ast)
+          if not status then
+            ut.errorHandler("Compilation error in line: ".. line .. "\n" ..err)
+            ut.printtable(ast)
+            return {}, err
+          end          
+      end
+      l = l + 1
+      line = fh:read("*line")
+    end
+    fh:close()
+    return list.getAll()
+  end
+        
   return {
-    compile = compile,
+    interpret = interpret,
+    interpretf = interpretf,
     _parse = parse -- expose for tests only
   }
 end
+
+local function Compiler()
+  
+  local function toline(t)
+    local r = ""
+    for _, v in ipairs(t) do
+      r = r .. tostring( opCode[v] or v ) .. " "
+    end
+    return r
+  end
+  
+  local function compile(path)
+    local savepath = string.gsub(path, ".lz$", ".lzc")
+    local ip = Interpreter()
+    local buffer = ip.interpretf(path)
+    ut.printtable(buffer)
+    --[[
+    local fc = io.open(savepath, "wb")
+    for _v in ipairs(buffer) do
+      print(v)
+      io:write(v, "\n")
+    end
+    fc.close()  
+    --]]
+  end
+  
+  return {
+    compile = compile
+  }
+end
+
 
 local function VM()
   -- Lazarus reserved words
@@ -309,6 +419,13 @@ local function VM()
         stack.push(-stack.pop())
       elseif code[pc] == "not" then
         stack.push( revTof(stack.pop()) )
+      elseif code[pc] == "jmpz" then
+        pc = pc + 1
+        local jmpDelta = code[pc]
+        local cond = stack.pop()
+        if (cond == 0 or nil) then pc = pc + jmpDelta end
+      elseif code[pc] == "noop" then
+        -- do nothing
       else
         error("LAZ0 unkown op code:" .. code[pc])
       end    
@@ -336,5 +453,6 @@ end
 lang._parse = Interpreter()._parse -- expose for tests only
 lang.Interpreter = Interpreter
 lang.VM = VM
+lang.Compiler = Compiler
 
 return lang

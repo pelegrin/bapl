@@ -38,5 +38,8 @@ function test_list()
   l.add(o)
   lu.assertEquals(l.elems(), 1, "added element in list")
   lu.assertEquals(l.get(1), o, "get element from list")
+  local w = "world"
+  l.replace(w, 1)
+  lu.assertEquals(l.get(1), w, "replace element in list")
 end
 os.exit( lu.LuaUnit.run() )

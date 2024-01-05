@@ -8,6 +8,7 @@ local function usage()
 end
 
 local isInteractive = arg[1] == "-i"
+local isCompile = arg[1] == "-c"
 local isDebug = #arg > 1 and arg[1] == "-debug" or isInteractive
 local path = not isInteractive and #arg > 0 and arg[#arg] or #arg > 1 and table.concat(arg, " ", 2)
 
@@ -21,41 +22,49 @@ if not isInteractive and not ut.fileExists(path) then
   os.exit(1)
 end
 
+if isCompile then
+  laz.Compiler().compile(path)
+  os.exit(0)
+end
 
-local fh = not isInteractive and io.open(path, "rb")
-
-local l = 1
-local line = not isInteractive and fh:read("*line") or io.stdout:write(string.format("%d > ", l)) and io.read()
 
 local d = ut.Debug(isDebug)
 local ip = laz.Interpreter()
 local vm = laz.VM()
 
+if not isInteractive then
+  local code = ip.interpretf(path)
+  d.debug(print, "Code")
+  d.debug(ut.printtable, code)
+  status, err =  pcall(vm.run, code)
+  status = status or ut.errorHandler("VM error: ".. err) and os.exit(1)
+  os.exit(0)
+end  
+
+-- Interactive mode
+
+local l = 1
+local line = io.stdout:write(string.format("%d > ", l)) and io.read()
+
 while line do    
-    local codeList, err = ip.compile(line)
-    if err and not isInteractive then os.exit(1) end
+    local codeList, err = ip.interpret(line)
+    if err then goto next end
     d.debug(print, "Code List")
     d.debug(ut.printtable, codeList)
     status, err =  pcall(vm.run, codeList)
     status = status or ut.errorHandler("VM error in line: ".. l .. "\n" .. line, err)
-    if not status and not isInteractive then os.exit(1) end
-    if not isInteractive then
-      line = fh:read("*line")
-      l = l + 1
-     else
-       d.debug(print, "Stack after calculations")
-       vm.printStack()
-       d.debug(print, "Memory")
-       vm.printMemory()
-       l = l + 1
-       io.stdout:write(string.format("%d > ", l))
-       line = io.read()
-    end
+    d.debug(print, "Stack after calculations")
+    vm.printStack()
+    d.debug(print, "Memory")
+    vm.printMemory()
+    ::next::
+    l = l + 1
+    io.stdout:write(string.format("%d > ", l))
+    line = io.read()
 end
-status = not isInteractive and fh:close()
 
 -- print stack
-if not isInteractive and isDebug then
+if isDebug then
   d.debug(print, "Stack after calculations")
   vm.printStack() 
   d.debug(print, "Memory")
