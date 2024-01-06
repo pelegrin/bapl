@@ -38,6 +38,10 @@ if not isInteractive then
   d.debug(ut.printtable, code)
   status, err =  pcall(vm.run, code)
   status = status or ut.errorHandler("VM error: ".. err) and os.exit(1)
+  d.debug(print, "VM stack")
+  d.debug(vm.printStack)
+    d.debug(print, "VM memory")
+  d.debug(vm.printMemory)
   os.exit(0)
 end  
 

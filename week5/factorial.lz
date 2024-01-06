@@ -1,0 +1,12 @@
+/*
+Factorial of 6 = 720
+*/
+
+n = 6
+r = 1
+while n > 0
+  r = r * n
+  n = n - 1
+done
+@r //720
+

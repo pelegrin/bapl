@@ -33,10 +33,10 @@ end
 
 function test_list()
   local l = ut.List()
-  lu.assertEquals(l.elems(), 0, "empty list has 0 elements")
+  lu.assertEquals(l.lastPosition(), 0, "empty list has 0 elements")
   local o = "hello"
   l.add(o)
-  lu.assertEquals(l.elems(), 1, "added element in list")
+  lu.assertEquals(l.lastPosition(), 1, "added element in list")
   lu.assertEquals(l.get(1), o, "get element from list")
   local w = "world"
   l.replace(w, 1)
