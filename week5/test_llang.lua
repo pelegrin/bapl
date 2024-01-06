@@ -98,6 +98,18 @@ function test_compile_if()
   lu.assertEquals(l[11], 0, "not fixable address in interactive mode")
 end
 
+function test_compile_and()
+  local ip = lang.Interpreter()
+  local l = ip.interpret(" 1 & 2 ")
+  lu.assertEquals(#l, 7, "compile logical and with shortcut")
+  lu.assertEquals(l[1], "push", "compile push code")
+  lu.assertEquals(l[2], 1, "compile constant 1")
+  lu.assertEquals(l[3], "jmpzp", "compile jmpzp (and shortcut)")
+  lu.assertEquals(l[4], 3, "compile jump relative address")
+  lu.assertEquals(l[5], "push", "compile push code")
+  lu.assertEquals(l[6], 2, "compile constant 2")
+  lu.assertEquals(l[7], "noop", "compile jump address")  
+end
 
 function test_syntax_error()
   local p = lang._parse

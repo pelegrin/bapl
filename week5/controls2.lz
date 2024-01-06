@@ -1,13 +1,13 @@
 x = 0
 if x  < 0
-@1
+  @1
 elseif x + 1  == 1 
-x = x + 1
+  x = x + 1
 else
-@3
+  @3
 end
 if x == 2
-@2
+  @2
 end
 @x
 1 // output 1

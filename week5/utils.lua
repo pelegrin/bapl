@@ -79,7 +79,7 @@ function List()
     l[#l + 1] = o
   end
   
-  local function elems()
+  local function lastPosition()
     return #l
   end
   
@@ -100,7 +100,7 @@ function List()
   return {
     get = get,
     add = add,
-    elems = elems,
+    lastPosition = lastPosition,
     getAll = getAll,
     replace = replace,
     removeLast = removeLast

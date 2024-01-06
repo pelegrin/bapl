@@ -4,12 +4,12 @@ This is a block comment
 x = 0
 y = 5
 if x < 3
-x = x + 1
+  x = x + 1
 else 
-x = x + 2
+  x = x + 2
 end
 if y > 6
-@y
-@x
+  @y
+  @x
 end
 @x // output should be 1
