@@ -108,7 +108,7 @@ end
 
 function test_compile_and()
   local ip = lang.Interpreter()
-  local l = ip.interpret(" 1 && 2 ")
+  local l = ip.interpret(" 1 & 2 ")
   lu.assertEquals(#l, 7, "compile logical and with shortcut")
   lu.assertEquals(l[1], "push", "compile push code")
   lu.assertEquals(l[2], 1, "compile constant 1")
