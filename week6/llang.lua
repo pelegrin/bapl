@@ -116,7 +116,7 @@ local reserved = {"return", "while", "for", "done","if", "else", "elseif", "end"
 local opA = lpeg.C(lpeg.S("+-")) * space -- addition/substraction
 local opM = lpeg.C(lpeg.S("*/%")) * space -- multiplication/division
 local opE = lpeg.C(lpeg.S("^")) * space   -- exponent
-local opC = lpeg.C(lpeg.P("<=") + ">=" + "==" + "!=" + "<" + ">" + "&" + "|") * space -- comparasion
+local opC = lpeg.C(lpeg.P("<=") + ">=" + "==" + "!=" + "<" + ">" + "&&" + "||") * space -- comparasion
 local opUn = lpeg.C(lpeg.P("--") + "++" + "-" + "+" + "!") -- unary operators
 local variable = (sym^1 + T"_" * T"_"^-1 * sym^1) * loc.alnum^0 / node("var", "val") * space
 local ref = lpeg.S("$") * (sym^1 * loc.alnum^0 / node("ref", "val") ) * space
