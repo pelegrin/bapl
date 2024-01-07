@@ -83,7 +83,7 @@ end
 
 function test_compile_if()
   local ip = lang.Interpreter()
-  local l = ip.interpret("x = 0, if x < 3 ")
+  local _,_,l = ip.interpret("x = 0, if x < 3 ")
   lu.assertEquals(#l, 11, "compile assignment and if statement")
   lu.assertEquals(l[1], "push", "compile push code")
   lu.assertEquals(l[2], 0, "compile constant 0")
@@ -96,6 +96,10 @@ function test_compile_if()
   lu.assertEquals(l[9], "lt", "compile x < 3")
   lu.assertEquals(l[10], "jmpz", "compile if")
   lu.assertEquals(l[11], 0, "not fixable address in interactive mode")
+  local _,_,l = ip.interpret("@x")
+  lu.assertEquals(#l, 4, "compile print x")
+  local l = ip.interpret("end")
+  lu.assertEquals(#l, 1, "compile end")
 end
 
 function test_compile_and()
@@ -131,11 +135,14 @@ function test_true_false()
   lu.assertEquals(vm._tOf(2 > 6), 0, " 2 > 6")
 end
 
-function test_ternary_operator()
+function test_boolean()
   local ip = lang.Interpreter()
   local vm = lang.VM()
-  local l = ip.interpret(" 2 > 1 ? 3 : 4 ")
-  lu.assertEquals(vm.run(l), 3, "ternary operator returns 3")
+  local l = ip.interpret("true")
+  lu.assertEquals(vm.run(l), lang.TRUE, "evaluate true")
+  local l = ip.interpret("false")
+  lu.assertEquals(vm.run(l), lang.FALSE, "evaluate false")
+
 end
 
 os.exit( lu.LuaUnit.run() )

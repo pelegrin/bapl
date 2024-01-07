@@ -111,7 +111,7 @@ local decimals = loc.digit^1 / tonumber / node("number", "val") * (-x) * space
 local hexes = "0" * x * lpeg.C((h + loc.digit)^1) / hex / node("number", "val") * space
 local numerals = hexes + scientific + floats + decimals
 
-local reserved = {"return", "while", "for", "done","if", "else", "elseif", "end", "and", "or"}
+local reserved = {"return", "while", "for", "done","if", "else", "elseif", "end", "and", "or", "true", "false"}
 
 local opA = lpeg.C(lpeg.S("+-")) * space -- addition/substraction
 local opM = lpeg.C(lpeg.S("*/%")) * space -- multiplication/division
@@ -131,6 +131,7 @@ local subexpression = lpeg.V("subexpression")
 local expression = lpeg.V("expression")
 local statement = lpeg.V("statement")
 local statements = lpeg.V("statements")
+local bool = space * (T"true" + T"false") / node("bool", "val")
 
 local comments = "//" * (lpeg.P(1) - "\n")^0
 local bcommentS = "/*" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentStarted = true; return true end)
@@ -149,7 +150,7 @@ local grammar = lpeg.P({"prog",
             + pr * expression / nodeSys
             + ternary
             + expression,    
-  primary = numerals + T"(" * expression * T")" + id,
+  primary = numerals + bool + T"(" * expression * T")" + id,
   unary = space * lpeg.Ct(opUn * primary) /foldUn + primary,    
   exponent = space * lpeg.Ct(unary * (opE * unary)^0) / foldBin,
   term = space * lpeg.Ct(exponent * (opM * exponent)^0) / foldBin,
@@ -165,7 +166,10 @@ local ops = {["+"] = "add", ["-"] = "sub",
              ["&"] = "and", ["|"] = "or"
            }    
 local unops = {["--"] = "dec", ["++"] = "inc", ["-"] = "minus", ["!"] = "not"
-            }
+          }
+          
+local TRUE = true
+local FALSE = false
 
 local function Interpreter(v, debug)
   local vars = v or {}
@@ -173,6 +177,7 @@ local function Interpreter(v, debug)
   local code = ut.List()
   local jmpAddress = ut.List() -- list of addresses marks the address to jmp from cycle or if statement
   local cAddress = ut.List() -- list of addresses marks the condition of cycle, to this address should jump at end of cycle
+  local buffer = ut.List() -- code buffer for interactive mode and processing control structures
   
   -- Debug facilities
   local isDebug = debug or false
@@ -239,6 +244,9 @@ local function Interpreter(v, debug)
     if ast.tag == "number" then
       addCode("push")
       addCode(ast.val)
+    elseif ast.tag == "bool" then
+      addCode("push")
+      addCode(ast.val == "true" and TRUE or FALSE)
     elseif ast.tag == "var" then
       addCode("load")
       addCode(getVar(ast.val))
@@ -339,8 +347,10 @@ local function Interpreter(v, debug)
     end    
   end
 
+  --runs in interactive mode
   local function interpret(line)
     code = ut.List()
+    if not buffer.isEmpty() then code.add(buffer); buffer.clear() end
     local status, ast, err = pcall(parse, line)
     if (err ~= nil) then ut.syntaxErrorHandler(err); return {}, err end
     if ast ~= nil then
@@ -352,6 +362,19 @@ local function Interpreter(v, debug)
             return {}, err
           end
     end
+    -- control structure is not finished
+    if jmpAddress.lastPosition() > 0 or cAddress.lastPosition() > 0 then 
+      buffer.add(code)
+      d.debug(print, "Buffer Code List")
+      d.debug(ut.printtable, buffer.getAll())
+      return nil, nil
+    end
+    if not buffer.isEmpty() then
+      buffer.add(code)
+      local r = buffer.getAll()
+      buffer.clear()
+      return r
+    end  
     return code.getAll()
   end    
   
@@ -382,7 +405,7 @@ local function Interpreter(v, debug)
     if cAddress.lastPosition() > 0 then error("while statement without closing done") end        
     return code.getAll()
   end
-        
+  
   return {
     interpret = interpret,
     interpretf = interpretf,
@@ -576,5 +599,7 @@ lang._parse = Interpreter()._parse -- expose for tests only
 lang.Interpreter = Interpreter
 lang.VM = VM
 lang.Compiler = Compiler
+lang.TRUE = TRUE
+lang.FALSE = FALSE
 
 return lang
