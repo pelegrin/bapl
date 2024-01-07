@@ -37,6 +37,10 @@ Supported *decrement, increment, unary minus.* (--, ++, -) in infix notation.
 ### Logical operators
 Lazarus provides the following relational operators.
 `< > <= >= == !=`
+### / Ternary operator
+Language provides ternary operator for conditional expression calculation.
+`<condition>? true expression : false expression`
+true expression only evaluates when result of condition expression is true
 
 ## Identifiers
 
@@ -46,10 +50,15 @@ An identifier is a sequence of letters and digits. The first character must be a
 Line starting with  /* introduces a block comment, which terminates with the characters */ started with new line. 
 Characters  // introduce a comment terminated with end of line.
 
+## Control structures
+TODO:
+if [elseif] [else] end
+while <condition> done
+
 ## System functions
 Print an expression
 > @ [expression]
 
 ## Reserved words
-> "return", "if", "do", "done", "while", "for"
+> "return", "while", "for", "done","if", "else", "elseif", "end", "and", "or"
  
