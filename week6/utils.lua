@@ -9,7 +9,7 @@ local function str_times(s, n)
 end
 
 local function printt(t, n)
-  if type(t) ~= "table" then return "" end
+  if type(t) ~= "table" and type(t) ~= "list" then return "" end
   local out = str_times("{", n) .. "\n"
   for k,v in pairs(t) do
     out = out .. str_times("\t", n).. k .. ": " .. (type(v) ~= "table" and tostring(v) or printt(v, n + 1)) .. "\n"
@@ -70,15 +70,32 @@ end
 
 function List()
   local l = {}
+  local list_metatable = {}
+  list_metatable.__index = list_metatable
   
   local function get(i)
     return l[i]
   end
   
-  local function add(o)
-    l[#l + 1] = o
+  --mimic list type  
+  local original_type = type  -- saves `type` function
+  type = function( obj )
+    local otype = original_type( obj )
+    if  otype == "table" and getmetatable( obj ) == list_metatable then
+        return "list"
+    end
+    return otype
   end
-  
+  local function add(o)
+    if type(o) == "list" then
+      for _,v in ipairs(o.getAll()) do
+        l[#l + 1] = v 
+      end 
+    else  
+      l[#l + 1] = o
+    end
+  end
+    
   local function lastPosition()
     return #l
   end
@@ -97,14 +114,25 @@ function List()
     return r
   end
   
-  return {
+  local function isEmpty()
+    return #l == 0
+  end
+  
+  local function clear()
+    l = {}
+  end
+  
+  return setmetatable ({
     get = get,
     add = add,
     lastPosition = lastPosition,
     getAll = getAll,
     replace = replace,
-    removeLast = removeLast
-  }
+    removeLast = removeLast,
+    isEmpty = isEmpty,
+    clear = clear
+  }, list_metatable)
+  
 end
 
 local function Debug(flag)

@@ -52,7 +52,13 @@ local line = io.stdout:write(string.format("%d > ", l)) and io.read()
 
 while line do    
     local codeList, err = ip.interpret(line)
-    if err then goto next end
+    if err then goto next end    
+    -- trick with temporary buffer for compile complete control statement
+    if codeList == nil and err == nil then 
+      l = l + 1
+      io.stdout:write(string.format("%d continue.. > ", l))
+      goto buffnext
+    end
     d.debug(print, "Code List")
     d.debug(ut.printtable, codeList)
     status, err =  pcall(vm.run, codeList)
@@ -64,6 +70,7 @@ while line do
     ::next::
     l = l + 1
     io.stdout:write(string.format("%d > ", l))
+    ::buffnext::
     line = io.read()
 end
 
