@@ -137,7 +137,7 @@ local function Interpreter(v, debug)
 
   local reserved = {"return", "while", "for", "done","if", "else", "elseif", "end", "and", "or", "true", "false", "number", "bool"}
 
-  local types = lpeg.C(T"number" + T"bool")
+  local types = lpeg.C(lpeg.P"number" + lpeg.P"bool") * space
 
   local opA = lpeg.C(lpeg.S("+-")) * space -- addition/substraction
   local opM = lpeg.C(lpeg.S("*/%")) * space -- multiplication/division

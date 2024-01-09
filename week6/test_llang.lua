@@ -6,23 +6,23 @@ local ut = require "utils"
 function test_parse()
   local p = lang._parse
   lu.assertEquals(p(""), nil, "parse empty string")
-  lu.assertEquals(p("0XFF"), {tag = "number", val=255}, "parse a hexadecimal number")
-  lu.assertEquals(p("-0X1B  "), {e1={tag="number", val=27}, op="-", tag="unop"}, "parse a negative hexadecimal number")
+  lu.assertEquals(p("0XFF"), {tag="number", ["type"]="number", val=255}, "parse a hexadecimal number")
+  lu.assertEquals(p("-0X1B  "),  {e1={tag="number",  ["type"]="number", val=27}, op="-", tag="unop"}, "parse a negative hexadecimal number")
   lu.assertEquals(p("-0X  "), nil, "parse not complete hexadecimal number")
-  lu.assertEquals(p("123 "), {tag = "number", val=123}, "parse a positive number")
-  lu.assertEquals(p("-56  "), {e1={tag="number", val=56}, op="-", tag="unop"}, "unary minus")  
-  lu.assertEquals(p("--56  "), {e1={tag="number", val=56}, op="--", tag="unop"}, "parse decrement")  
-  lu.assertEquals(p("--(-56)  "), {e1={e1={tag="number", val=56}, op="-", tag="unop"}, op="--", tag="unop"}, "parse decrement a negative number")  
-  lu.assertEquals(p("-0.6   "), {e1={tag="number", val=0.6}, op="-", tag="unop"}, "parse a negative float number")  
+  lu.assertEquals(p("123 "), {tag = "number", val=123,  ["type"]="number"}, "parse a positive number")
+  lu.assertEquals(p("-56  "), {e1={tag="number", val=56, ["type"]="number" }, op="-", tag="unop"}, "unary minus")  
+  lu.assertEquals(p("--56  "), {e1={tag="number", val=56,  ["type"]="number"}, op="--", tag="unop"}, "parse decrement")  
+  lu.assertEquals(p("--(-56)  "), {e1={e1={tag="number", val=56,  ["type"]="number"}, op="-", tag="unop"}, op="--", tag="unop"}, "parse decrement a negative number")  
+  lu.assertEquals(p("-0.6   "), {e1={tag="number", val=0.6,  ["type"]="number"}, op="-", tag="unop"}, "parse a negative float number")  
   lu.assertEquals(p("-0.  "), nil, "parse incorrect decimal number")  
-  lu.assertEquals(p("45.1226  "), {tag = "number", val=45.1226}, "parse a positive float number")  
+  lu.assertEquals(p("45.1226  "), {tag = "number", val=45.1226,  ["type"]="number"}, "parse a positive float number")  
   lu.assertEquals(p("-A  "), {e1={tag="var", val="A"}, op="-", tag="unop"}, "parse unary op with variable")  
-  lu.assertEquals(p("1 + 3  "), {e1={tag="number", val=1}, e2={tag="number", val=3}, op="+", tag="binop"}, "parse summation expression")  
-  lu.assertEquals(p("1 < 3  "), {e1={tag="number", val=1}, e2={tag="number", val=3}, op="<", tag="binop"}, "parse logical expression")  
-  lu.assertEquals(p("1e-3  "), {tag="number", val=0.001}, "parse scientific notation")  
-  lu.assertEquals(p("1.25e-3  "), {tag="number", val=0.00125}, "parse scientific notation with minus e and dot")  
-  lu.assertEquals(p(" 625E12  "), {tag="number", val=6.25e+14}, "parse scientific notation with capital E")  
-  lu.assertEquals(p("!1  "), {e1={tag="number", val=1}, op="!", tag="unop"}, "parse not operation")  
+  lu.assertEquals(p("1 + 3  "), {e1={tag="number", val=1,  ["type"]="number"}, e2={tag="number", val=3,  ["type"]="number"}, op="+", tag="binop",  ["type"]="number"}, "parse summation expression")  
+  lu.assertEquals(p("1 < 3  "), {e1={tag="number", val=1,  ["type"]="number"}, e2={tag="number", val=3,  ["type"]="number"}, op="<", tag="binop",  ["type"]="number"}, "parse logical expression")  
+  lu.assertEquals(p("1e-3  "), {tag="number", val=0.001,  ["type"]="number"}, "parse scientific notation")  
+  lu.assertEquals(p("1.25e-3  "), {tag="number", val=0.00125,  ["type"]="number"}, "parse scientific notation with minus e and dot")  
+  lu.assertEquals(p(" 625E12  "), {tag="number", val=6.25e+14,  ["type"]="number"}, "parse scientific notation with capital E")  
+  lu.assertEquals(p("!1  "), {e1={tag="number", val=1,  ["type"]="number"}, op="!", tag="unop"}, "parse not operation")  
 end
 
 function test_varRef()
@@ -34,7 +34,7 @@ function test_varRef()
   lu.assertEquals(p("1a"), nil, "parse incorrect variable")
   lu.assertEquals(p("$a"), {tag = "ref", val = "a"}, "parse a reference")
   lu.assertEquals(p("a + b"), {e1={tag="var", val="a"}, e2={tag="var", val="b"}, op="+", tag="binop"}, "parse a variable exp")
-  lu.assertEquals(p(" a = 0"), {exp={tag="number", val=0}, id={tag="var", val="a"}, tag="assign"}, "parse a variable exp")
+  lu.assertEquals(p(" a = 0"), {exp={tag="number", val=0,  ["type"]="number"}, id={tag="var", val="a"}, tag="assign"}, "parse a variable exp")
   local exp = {
     exp={e1={tag="var", val="a"}, e2={tag="var", val="b"}, op="+", tag="binop"},
     id={tag="var", val="c"},
@@ -42,7 +42,7 @@ function test_varRef()
   }  
  lu.assertEquals(p(" c = a + b"), exp, "parse assignment expression")   
  local exp2 = {
-    exp={e1={tag="number", val=1}, e2={tag="number", val=3}, op="*", tag="binop"},
+    exp={e1={tag="number", val=1,  ["type"]="number"}, e2={tag="number", val=3,  ["type"]="number"}, op="*", tag="binop",  ["type"]="number"},
     id={tag="var", val="a"},
     tag="assign"
   }   
@@ -53,18 +53,42 @@ function test_sequence()
   local p = lang._parse
   local exp = {
     s1={
-        s1={exp={tag="number", val=0}, id={tag="var", val="x"}, tag="assign"},
-        s2={exp={tag="number", val=0}, id={tag="var", val="y"}, tag="assign"},
+        s1={
+            exp={tag="number", type="number", val=0},
+            id={tag="var", val="x"},
+            tag="assign"
+        },
+        s2={
+            exp={tag="number", type="number", val=0},
+            id={tag="var", val="y"},
+            tag="assign"
+        },
         tag="seq"
     },
-    s2={exp={tag="number", val=1}, id={tag="var", val="z"}, tag="assign"},
+    s2={
+        exp={tag="number", type="number", val=1},
+        id={tag="var", val="z"},
+        tag="assign"
+    },
     tag="seq"
   }
   lu.assertEquals(p("x = 0, y = 0, z = 1"), exp, "parse sequence")
-  lu.assertEquals(p("x = 0,,"), {exp={tag="number", val=0}, id={tag="var", val="x"}, tag="assign"}, "parse empty sequence")
+  lu.assertEquals(p("x = 0,,"), {
+    exp={tag="number", type="number", val=0},
+    id={tag="var", val="x"},
+    tag="assign"
+  }, "parse empty sequence")
   exp = {
-    s1={exp={tag="number", val=0}, id={tag="var", val="x"}, tag="assign"},
-    s2={exp={tag="number", val=0}, id={tag="var", val="y"}, tag="assign"},
+    s1={
+        exp={tag="number", type="number", val=0},
+        id={tag="var", val="x"},
+        tag="assign"
+    },
+    s2={
+        exp={tag="number", type="number", val=0},
+        id={tag="var", val="y"},
+        tag="assign"
+    },
     tag="seq"
   }
   lu.assertEquals(p("x = 0,,y = 0"), exp, "parse empty sequence")
@@ -73,6 +97,7 @@ end
 
 function test_compile_assignment()
   local ip = lang.Interpreter()
+  ip.interpret("number x")
   local l = ip.interpret("x = 0 ")
   lu.assertEquals(#l, 4, "compile assignment returns not empty list")
   lu.assertEquals(l[1], "push", "compile push code")
@@ -84,26 +109,29 @@ end
 -- test if in interactive mode
 function test_compile_if()
   local ip = lang.Interpreter()
-  ip.interpret("x = 0, if x < 3 ")
+  ip.interpret("number x, x = 0, if x < 3 ")
   ip.interpret("@x")
   local l = ip.interpret("end")
-  lu.assertEquals(#l, 16, "compile assignment and if statement")
-  lu.assertEquals(l[1], "push", "compile push code")
-  lu.assertEquals(l[2], 0, "compile constant 0")
-  lu.assertEquals(l[3], "store", "compile store code")
-  lu.assertEquals(l[4], 1, "compile constant 1")
-  lu.assertEquals(l[5], "load", "compile x < 3")
-  lu.assertEquals(l[6], 1, "compile x < 3")
-  lu.assertEquals(l[7], "push", "compile x < 3")
-  lu.assertEquals(l[8], 3, "compile x < 3")
-  lu.assertEquals(l[9], "lt", "compile x < 3")
-  lu.assertEquals(l[10], "jmpz", "compile if")
-  lu.assertEquals(l[11], 5, "fixed address in interactive mode")  
-  lu.assertEquals(l[12], "load", "load x")  
-  lu.assertEquals(l[13], 1, "load x")  
-  lu.assertEquals(l[14], "syscall", "print")  
-  lu.assertEquals(l[15], "1", "print")  
-  lu.assertEquals(l[16], "noop", "end of if control statement")  
+  lu.assertEquals(#l, 19, "compile assignment and if statement")
+  lu.assertEquals(l[1], "init", "declare x")
+  lu.assertEquals(l[2], 1, "declare x")
+  lu.assertEquals(l[3], "number", "declare x")
+  lu.assertEquals(l[4], "push", "compile push code")
+  lu.assertEquals(l[5], 0, "compile constant 0")
+  lu.assertEquals(l[6], "store", "compile store code")
+  lu.assertEquals(l[7], 1, "compile constant 1")
+  lu.assertEquals(l[8], "load", "compile x < 3")
+  lu.assertEquals(l[9], 1, "compile x < 3")
+  lu.assertEquals(l[10], "push", "compile x < 3")
+  lu.assertEquals(l[11], 3, "compile x < 3")
+  lu.assertEquals(l[12], "lt", "compile x < 3")
+  lu.assertEquals(l[13], "jmpz", "compile if")
+  lu.assertEquals(l[14], 5, "fixed address in interactive mode")  
+  lu.assertEquals(l[15], "load", "load x")  
+  lu.assertEquals(l[16], 1, "load x")  
+  lu.assertEquals(l[17], "syscall", "print")  
+  lu.assertEquals(l[18], "1", "print")  
+  lu.assertEquals(l[19], "noop", "end of if control statement")  
 end
 
 function test_compile_and()
@@ -129,7 +157,7 @@ end
 
 function test_comments()
   local p = lang._parse
-  lu.assertEquals(p("5 // 4"), {tag="number", val=5}, "test end of line comments")
+  lu.assertEquals(p("5 // 4"), {tag="number", type = "number", val=5}, "test end of line comments")
 end
 
 function test_true_false()
@@ -143,9 +171,9 @@ function test_boolean()
   local ip = lang.Interpreter()
   local vm = lang.VM()
   local l = ip.interpret("true")
-  lu.assertEquals(vm.run(l), lang.TRUE, "evaluate true")
+  lu.assertEquals(vm.run(l), 1, "evaluate true")
   local l = ip.interpret("false")
-  lu.assertEquals(vm.run(l), lang.FALSE, "evaluate false")
+  lu.assertEquals(vm.run(l), 0, "evaluate false")
 
 end
 
