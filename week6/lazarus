@@ -45,6 +45,16 @@ if not isInteractive then
   os.exit(0)
 end  
 
+local function debugPrint(isDebug)
+  if not isDebug then return end
+  d.debug(print, "Stack after calculations")
+  vm.printStack() 
+  d.debug(print, "Vars in interpreter")
+  ip.printVars()
+  d.debug(print, "Memory")
+  vm.printMemory()
+end
+
 -- Interactive mode
 
 local l = 1
@@ -60,24 +70,13 @@ while line do
       goto buffnext
     end
     d.debug(print, "Code List")
-    d.debug(ut.printtable, codeList)
+    d.debug(ut.printtable, codeList)    
     status, err =  pcall(vm.run, codeList)
     status = status or ut.errorHandler("VM error in line: ".. l .. "\n" .. line, err)
-    d.debug(print, "Stack after calculations")
-    vm.printStack()
-    d.debug(print, "Memory")
-    vm.printMemory()
+    debugPrint(isDebug)
     ::next::
     l = l + 1
     io.stdout:write(string.format("%d > ", l))
     ::buffnext::
     line = io.read()
-end
-
--- print stack
-if isDebug then
-  d.debug(print, "Stack after calculations")
-  vm.printStack() 
-  d.debug(print, "Memory")
-  vm.printMemory()
 end
