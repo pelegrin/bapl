@@ -38,140 +38,7 @@ local function I (msg)
 end
 --]]
 
-local function node(tag, ...)
-  local labels = table.pack(...)
-  return function (...)
-    local params = table.pack(...)
-    local t = { tag = tag}
-    for i, v in ipairs(labels) do t[v] = params[i] end    
-    return t
-  end  
-end
-
-local function nodeSys(exp)
-  return {tag = "sys", code = "1", exp = exp}
-end
-
-local function hex(n)  
-  return tonumber(n, 16)
-end
-
--- Convert a list {n1, "+", n2, "+", n3, ...} into a tree
--- {...{ op = "+", e1 = {op = "+", e1 = n1, n2 = n2}, e2 = n3}...}
-local function foldBin(lst)
-  local tree = lst[1]
-  for i = 2, #lst, 2 do
-    tree = { tag = "binop", e1 = tree, op = lst[i], e2 = lst[i + 1] }
-  end  
-  return tree
-end
-
--- Convert a list {st1, ",", st2, "," st3, ...} into a tree
-local function foldSts(lst)
-  local tree = lst[1]
-  for i = 2, #lst do
-    tree = { tag = "seq", s1 = tree, s2 = lst[i] }
-  end  
-  return tree
-end
-
--- Convert a list {cond, true expression, false expression} into a tree
-local function foldTernary(lst)
-  return { tag = "ternary", cond = lst[1], e1 = lst[2], e2 = lst[3] }
-end
-
-local function foldUn(lst)
-  local op = lst[1]
-  local val = lst[2]
-  if op == "+" then return val end -- folding of unary plus
-  return { tag = "unop", op = op, e1 = val}
-end
-  
-local space = lpeg.V("space")
-
-local function T(t)
-  return t * space
-end
-
-local maxmatch = 0
-local bCommentStarted = false
-local bCommentEnded = false
-
-local loc = lpeg.locale()
-
-local sign = lpeg.S("-+")^-1
-local h = lpeg.S("aAbBcCdDeEfF") 
-local x = lpeg.S("xX")
-local sym = lpeg.R("az", "AZ")
-
--- numericals
-local floats = loc.digit^1 * "." * loc.digit^1 / tonumber / node("number", "val") * space
-local scientific = loc.digit^1* ("." * loc.digit^1 + loc.digit^0 )* lpeg.S("eE") * lpeg.P("-")^0 * loc.digit^1 / tonumber / node("number", "val") * space
-local decimals = loc.digit^1 / tonumber / node("number", "val") * (-x) * space
-local hexes = "0" * x * lpeg.C((h + loc.digit)^1) / hex / node("number", "val") * space
-local numerals = hexes + scientific + floats + decimals
-
-local reserved = {"return", "while", "for", "done","if", "else", "elseif", "end", "and", "or", "true", "false"}
-
-local opA = lpeg.C(lpeg.S("+-")) * space -- addition/substraction
-local opM = lpeg.C(lpeg.S("*/%")) * space -- multiplication/division
-local opE = lpeg.C(lpeg.S("^")) * space   -- exponent
-local opC = lpeg.C(lpeg.P("<=") + ">=" + "==" + "!=" + "<" + ">" + "&" + "|") * space -- comparasion
-local opUn = lpeg.C(lpeg.P("--") + "++" + "-" + "+" + "!") -- unary operators
-local variable = (sym^1 + T"_" * T"_"^-1 * sym^1) * loc.alnum^0 / node("var", "val") * space
-local ref = lpeg.S("$") * (sym^1 * loc.alnum^0 / node("ref", "val") ) * space
-local id = variable + ref
-local pr = space * lpeg.P("@")
-local unary = lpeg.V("unary")
-local primary = lpeg.V("primary")
-local ternary = lpeg.V("ternary")
-local term = lpeg.V("term")
-local exponent = lpeg.V("exponent")
-local subexpression = lpeg.V("subexpression")
-local expression = lpeg.V("expression")
-local statement = lpeg.V("statement")
-local statements = lpeg.V("statements")
-local bool = space * (T"true" + T"false") / node("bool", "val")
-
-local comments = "//" * (lpeg.P(1) - "\n")^0
-local bcommentS = "/*" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentStarted = true; return true end)
-local bcommentE = "*/" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentEnded = true; return true end)
-
-local grammar = lpeg.P({"prog",
-  prog = space * bcommentS^-1 * bcommentE^-1 * statements * -1,    
-  statements = space * lpeg.Ct(statement * (T"," * (statement + ""))^0)/ foldSts,    
-  statement = T"if" * expression / node("if", "cond") 
-            + T"elseif" * expression / node("elseif", "cond") 
-            + T"else"/ node("else")
-            + T"end"/node("end")
-            + T"while" * expression / node("while", "cond")
-            + T"done"/node("done")
-            + space * id * T"=" * (ternary + expression) / node("assign", "id", "exp")
-            + pr * expression / nodeSys
-            + ternary
-            + expression,    
-  primary = numerals + bool + T"(" * expression * T")" + id,
-  unary = space * lpeg.Ct(opUn * primary) /foldUn + primary,    
-  exponent = space * lpeg.Ct(unary * (opE * unary)^0) / foldBin,
-  term = space * lpeg.Ct(exponent * (opM * exponent)^0) / foldBin,
-  subexpression = space * lpeg.Ct(term * (opA * term)^0) / foldBin,
-  ternary = space * lpeg.Ct(expression * T"?" * expression * T":" * expression) / foldTernary,
-  expression = space * lpeg.Ct(subexpression * (opC * subexpression)^0) / foldBin,
-  space = (loc.space + comments)^0 * lpeg.P(function (_, p)  maxmatch = p ;return true end)            
-})
-
-local ops = {["+"] = "add", ["-"] = "sub",
-             ["*"] = "mul", ["/"] = "div", ["^"] = "exp", ["%"] = "rem",
-             ["<="] = "lq", [">="] = "gq", ["=="] = "eq", ["!="] = "nq", ["<"] = "lt", [">"] = "gt",
-             ["&"] = "and", ["|"] = "or"
-           }    
-local unops = {["--"] = "dec", ["++"] = "inc", ["-"] = "minus", ["!"] = "not"
-          }
-          
-local TRUE = true
-local FALSE = false
-
-local function Interpreter(v, debug)
+local function Interpreter(v, debug)  
   local vars = v or {}
   local nvars = v and #v or 0
   local code = ut.List()
@@ -182,6 +49,161 @@ local function Interpreter(v, debug)
   -- Debug facilities
   local isDebug = debug or false
   local d = ut.Debug(isDebug)
+  
+  -- Parser
+  local function node(tag, ...)
+    local labels = table.pack(...)
+    return function (...)
+      local params = table.pack(...)
+      local t = {}
+      if type(tag) == "table" then
+        for k,v in pairs(tag) do t[k] = v end
+      else
+        t["tag"] = tag -- for backward compatibility
+       end 
+      for i, v in ipairs(labels) do
+        t[v] = params[i]
+        if tag == "var" and v == "val" then
+          -- in variable case, get type from vars
+          t["type"] = (vars[params[i]] or {})["type"]
+        end  
+      end    
+      return t
+    end  
+  end
+
+  local function nodeSys(exp)
+    return {tag = "sys", code = "1", exp = exp}
+  end
+
+  local function hex(n)  
+    return tonumber(n, 16)
+  end
+
+  -- Convert a list {n1, "+", n2, "+", n3, ...} into a tree
+  -- {...{ op = "+", e1 = {op = "+", e1 = n1, n2 = n2}, e2 = n3}...}
+  local function foldBin(lst)
+    local tree = lst[1]
+    for i = 2, #lst, 2 do
+      tree = { tag = "binop", e1 = tree, op = lst[i], e2 = lst[i + 1], ["type"] = tree.type }
+    end  
+    return tree
+  end
+
+  -- Convert a list {st1, ",", st2, "," st3, ...} into a tree
+  local function foldSts(lst)
+    local tree = lst[1]
+    for i = 2, #lst do
+      tree = { tag = "seq", s1 = tree, s2 = lst[i] }
+    end  
+    return tree
+  end
+
+  -- Convert a list {cond, true expression, false expression} into a tree
+  local function foldTernary(lst)
+    return { tag = "ternary", cond = lst[1], e1 = lst[2], e2 = lst[3] }
+  end
+
+  local function foldUn(lst)
+    local op = lst[1]
+    local val = lst[2]
+    if op == "+" then return val end -- folding of unary plus
+    return { tag = "unop", op = op, e1 = val}
+  end
+    
+  local space = lpeg.V("space")
+
+  local function T(t)
+    return t * space
+  end
+
+  local maxmatch = 0
+  local bCommentStarted = false
+  local bCommentEnded = false
+
+  local loc = lpeg.locale()
+
+  local sign = lpeg.S("-+")^-1
+  local h = lpeg.S("aAbBcCdDeEfF") 
+  local x = lpeg.S("xX")
+  local sym = lpeg.R("az", "AZ")
+
+  -- numericals
+  local floats = loc.digit^1 * "." * loc.digit^1 / tonumber / node({tag = "number", ["type"] = "number"}, "val") * space
+  local scientific = loc.digit^1* ("." * loc.digit^1 + loc.digit^0 )* lpeg.S("eE") * lpeg.P("-")^0 * loc.digit^1 / tonumber / node({tag = "number", ["type"] = "number"}, "val") * space
+  local decimals = loc.digit^1 / tonumber / node({tag = "number", ["type"] = "number"}, "val") * (-x) * space
+  local hexes = "0" * x * lpeg.C((h + loc.digit)^1) / hex / node({tag = "number", ["type"] = "number"}, "val") * space
+  local numerals = hexes + scientific + floats + decimals
+
+  local reserved = {"return", "while", "for", "done","if", "else", "elseif", "end", "and", "or", "true", "false", "number", "bool"}
+
+  local types = lpeg.C(lpeg.P"number" + lpeg.P"bool") * space
+
+  local opA = lpeg.C(lpeg.S("+-")) * space -- addition/substraction
+  local opM = lpeg.C(lpeg.S("*/%")) * space -- multiplication/division
+  local opE = lpeg.C(lpeg.S("^")) * space   -- exponent
+  local opC = lpeg.C(lpeg.P("<=") + ">=" + "==" + "!=" + "<" + ">" + "&" + "|") * space -- comparasion
+  local opUn = lpeg.C(lpeg.P("--") + "++" + "-" + "+" + "!") -- unary operators
+  local variable = (sym^1 + T"_" * T"_"^-1 * sym^1) * loc.alnum^0 / node("var", "val") * space
+  local ref = lpeg.S("$") * (sym^1 * loc.alnum^0 / node("ref", "val") ) * space
+  local id = variable + ref
+  local pr = lpeg.P("@")
+  local unary = lpeg.V("unary")
+  local primary = lpeg.V("primary")
+  local ternary = lpeg.V("ternary")
+  local term = lpeg.V("term")
+  local exponent = lpeg.V("exponent")
+  local subexpression = lpeg.V("subexpression")
+  local expression = lpeg.V("expression")
+  local statement = lpeg.V("statement")
+  local statements = lpeg.V("statements")
+  local bool = (lpeg.P"true" + lpeg.P"false") / node({tag = "bool", ["type"] = "bool"}, "val") * space
+  
+  local declaration = types * id * space
+
+  local comments = "//" * (lpeg.P(1) - "\n")^0
+  local bcommentS = "/*" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentStarted = true; return true end)
+  local bcommentE = "*/" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentEnded = true; return true end)
+
+  local grammar = lpeg.P({"prog",
+    prog = space * bcommentS^-1 * bcommentE^-1 * statements * -1,    
+    statements = space * lpeg.Ct(statement * (T"," * (statement + ""))^0)/ foldSts,    
+    statement = T"if" * expression / node("if", "cond") 
+              + T"elseif" * expression / node("elseif", "cond") 
+              + T"else"/ node("else")
+              + T"end"/node("end")
+              + T"while" * expression / node("while", "cond")
+              + T"done"/node("done")
+              + declaration / node("declaration", "type", "id")
+              + id * T"=" * (ternary + expression) / node("assign", "id", "exp")
+              + pr * expression / nodeSys
+              + ternary
+              + expression,    
+    primary = numerals 
+              + bool
+              + T"(" * expression * T")"
+              + id,
+    unary = lpeg.Ct(opUn * primary) /foldUn + primary,    
+    exponent = lpeg.Ct(unary * (opE * unary)^0) / foldBin,
+    term = lpeg.Ct(exponent * (opM * exponent)^0) / foldBin,
+    subexpression = lpeg.Ct(term * (opA * term)^0) / foldBin,
+    ternary = lpeg.Ct(expression * T"?" * expression * T":" * expression) / foldTernary,
+    expression = lpeg.Ct(subexpression * (opC * subexpression)^0) / foldBin,
+    space = (loc.space + comments)^0 * lpeg.P(function (_, p)  maxmatch = p ;return true end)            
+  })
+
+  local ops = {["+"] = "add", ["-"] = "sub",
+               ["*"] = "mul", ["/"] = "div", ["^"] = "exp", ["%"] = "rem",
+               ["<="] = "lq", [">="] = "gq", ["=="] = "eq", ["!="] = "nq", ["<"] = "lt", [">"] = "gt",
+               ["&"] = "and", ["|"] = "or"
+             }    
+  local unops = {["--"] = "dec", ["++"] = "inc", ["-"] = "minus", ["!"] = "not"
+            }
+            
+  local TRUE = 1
+  local FALSE = 0
+  
+  
   
   -- fix element in list at position stored in the end of jmpAddress with dif with address o
   local function fixAddress(o)
@@ -220,79 +242,101 @@ local function Interpreter(v, debug)
     return false
   end
   
-  -- Get value of global variable
+  local function checkType(t1, t2)
+    if t2 ~= nil and t1 ~= nil and string.gsub(t1, " ","") ~= string.gsub(t2, " ", "")  then
+      error("Type checking error. Expected " .. string.gsub(t1, " ", "") .. " but get " .. string.gsub(t2, " ",""))
+    end
+  end
+
+  -- Get global variable structure
   local function getVar(id)
     if Rw(id) then error("Variable "..tostring(id) .. " is a reserved word") end
-    local num = vars[id]
-    if not num then error("Undefined variable " ..tostring(id)) end
+    local v = vars[id]
+    if not v then error("Undefined variable " ..tostring(id)) end
+    return v
+  end
+  
+  -- Init global variable, returns index in list
+  local function init(id, t)
+    local s = vars[id]
+    if s then 
+      checkType(s["type"], t)
+      return s.val
+    end
+    num = nvars + 1
+    vars[id] = {val = num, ["type"] = t}
+    nvars = num
     return num
   end
   
   -- Store global variable, returns index in list
   local function store(id)
-    local num = vars[id]
-    if not num then
-      num = nvars + 1
-      vars[id] = num
-      nvars = num
-    end  
-    return num
+    local s = vars[id]
+    if not s then error("Variable "..tostring(id) .. " is not declared") end
+    return s.val
   end
-
-  -- Codify expression
-  local function codeExp(ast)
+  
+  -- Codify expression 
+  -- ast - AST
+  -- t - type of expression for type checking
+  local function codeExp(ast, t)
     if ast.tag == "number" then
+      checkType("number", t)
       addCode("push")
       addCode(ast.val)
     elseif ast.tag == "bool" then
+      checkType("bool", t)
       addCode("push")
       addCode(ast.val == "true" and TRUE or FALSE)
     elseif ast.tag == "var" then
       addCode("load")
-      addCode(getVar(ast.val))
+      addCode(getVar(ast.val).val)
     elseif ast.tag == "ref" then
       addCode("loadg")
-      addCode(getVar(ast.val))
+      addCode(getVar(ast.val).val)
     elseif ast.tag == "binop" and ops[ast.op] == "and" then
-      codeExp(ast.e1)
+      codeExp(ast.e1, t)
       addCode("jmpzp")
       addCode(0) -- jump address to fix
       local adr = code.lastPosition()
-      codeExp(ast.e2)
+      codeExp(ast.e2, t)
       addCode("noop")
       local fixAddr = code.lastPosition() - adr
       code.replace(fixAddr, adr)
     elseif ast.tag == "binop" and ops[ast.op] == "or" then
-      codeExp(ast.e1)
+      codeExp(ast.e1, t)
       addCode("jmpnzp")
       addCode(0) -- jump address to fix
       local adr = code.lastPosition()
-      codeExp(ast.e2)
+      codeExp(ast.e2, t)
       addCode("noop")
       local fixAddr = code.lastPosition() - adr
       code.replace(fixAddr, adr)      
     elseif ast.tag == "ternary" then
-      codeExp(ast.cond)
+      codeExp(ast.cond, t)
       addCode("jmpz")
       addCode(0)
       local adr = code.lastPosition()
-      codeExp(ast.e1)
+      codeExp(ast.e1, t)
       addCode("jmp")
       addCode(0)
       local adr2 = code.lastPosition()
       addCode("noop")
       local fixAddr = code.lastPosition() - adr     
       code.replace(fixAddr, adr)
-      codeExp(ast.e2)
+      codeExp(ast.e2, t)
       addCode("noop")
       fixAddr = code.lastPosition() - adr     
       code.replace(fixAddr, adr2)  
     elseif ast.tag == "binop" then
-      codeExp(ast.e1)
-      codeExp(ast.e2)
+      checkType(ast.e1.type, ast.e2.type)
+      checkType(ast.e1.type, t)
+      checkType(ast.e2.type, t)
+      codeExp(ast.e1, t or ast.e1.type)
+      codeExp(ast.e2, t or ast.e2.type)
       addCode(ops[ast.op])
     elseif ast.tag == "unop" then
-      codeExp(ast.e1)
+      codeExp(ast.e1, t)
       addCode(unops[ast.op])
     else error("invalid tree")
     end    
@@ -300,7 +344,12 @@ local function Interpreter(v, debug)
 
   -- Codify Statement
   local function codeStatement(ast)
-    if ast.tag == "assign" then
+    if ast.tag == "declaration" then
+      addCode("init")
+      addCode(init(ast.id.val, ast.type))
+      addCode(ast.type) -- type as string for now, change to number later
+    elseif ast.tag == "assign" then
+      checkType(ast.id.type, ast.exp.type)
       codeExp(ast.exp)
       addCode("store")
       addCode(store(ast.id.val))    
@@ -406,9 +455,14 @@ local function Interpreter(v, debug)
     return code.getAll()
   end
   
+  local function printVars()
+    ut.printtable(vars)
+  end
+  
   return {
     interpret = interpret,
     interpretf = interpretf,
+    printVars = printVars,
     _parse = parse -- expose for tests only
   }
 end
@@ -463,10 +517,17 @@ local function VM(debug)
         stack.push(code[pc])
       elseif code[pc] == "load" then
          pc = pc + 1
-         stack.push(mem[code[pc]])
+         local v = mem[code[pc]].val
+         if v == nil then error("Variable is not initialized")  end
+         stack.push(v)
+      elseif code[pc] == "init" then
+        pc = pc + 1
+        num = pc
+        pc = pc + 1        
+        mem[code[num]] = {["type"] = code[pc]}
       elseif code[pc] == "store" then
          pc = pc + 1
-         mem[code[pc]] = stack.pop()
+         mem[code[pc]].val = stack.pop()
       elseif code[pc] == "syscall" then
          pc = pc + 1        
          opcode = code[pc]

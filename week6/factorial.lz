@@ -2,8 +2,8 @@
 Factorial of 6 = 720
 */
 
-n = 6
-r = 1
+number n, n = 6
+number r, r = 1
 while n > 0
   r = r * n
   n = n - 1
