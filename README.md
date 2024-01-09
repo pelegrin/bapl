@@ -61,4 +61,11 @@ Print an expression
 
 ## Reserved words
 > "return", "while", "for", "done","if", "else", "elseif", "end", "and", "or"
+
+## Type system
+declaration
+initialisation
+type checking for binary and unary operations
+
+numbers, bool, array, array of array ....
  
