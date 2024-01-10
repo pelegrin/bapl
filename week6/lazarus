@@ -40,7 +40,7 @@ if not isInteractive then
   status = status or ut.errorHandler("VM error: ".. err) and os.exit(1)
   d.debug(print, "VM stack")
   d.debug(vm.printStack)
-    d.debug(print, "VM memory")
+  d.debug(print, "VM memory")
   d.debug(vm.printMemory)
   os.exit(0)
 end  

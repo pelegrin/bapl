@@ -3,40 +3,19 @@ local ut = require "utils"
 
 local lang = {}
 
--- TODO: Refine. For compiled files 
---[[
-local opCode = { ['push'] =    0x01,
-  ['load'] =    0x02,
-  ['store'] =   0x03,
-  ['syscall'] = 0x04,
-  ['getglobal'] = 0x05,
-  ['setglobal'] = 0x06,
-  ---
-  ['add'] =   0x10,
-  ['sub'] =   0x11,
-  ['mul'] =   0x12,
-  ['div'] =   0x13,
-  ['exp'] =   0x14,
-  ['rem'] =   0x15,
-  ['lq'] =    0x16,
-  ['gq'] =    0x17,
-  ['eq'] =    0x18,
-  ['nq'] =    0x19,
-  ['lt'] =    0x1A,
-  ['gt'] =    0x1B,
-  ['dec'] =   0x1C,
-  ['inc'] =   0x1D,
-  ['minus'] = 0x1E,
-  ['not'] =   0x1F  
-}
---]]
-
 --[[
 -- LPeg Debug function
 local function I (msg)
   return lpeg.P(function () print(msg); return true end)
 end
 --]]
+
+local TRUE = 1
+local FALSE = 0
+  
+local function isArrayType(t)
+  return string.find(t, "%[")
+end
 
 local function Interpreter(v, debug)  
   local vars = v or {}
@@ -50,7 +29,13 @@ local function Interpreter(v, debug)
   local isDebug = debug or false
   local d = ut.Debug(isDebug)
   
-  -- Parser
+  -- Parser part
+  
+  --[[
+  -- Generic node function
+  -- allows set tree elements if pass table in tag parameter
+  -- sending a type information like this
+  --]]
   local function node(tag, ...)
     local labels = table.pack(...)
     return function (...)
@@ -66,16 +51,17 @@ local function Interpreter(v, debug)
         if tag == "var" and v == "val" then
           -- in variable case, get type from vars
           t["type"] = (vars[params[i]] or {})["type"]
-        end  
+        end
+        if tag == "getidx" and v == "id" then 
+          -- in case of array get type from id table
+          local idxType = (t[v])["type"] or ""
+          t["type"] = string.gsub(idxType, "[%[%]]", "")
+        end
       end    
       return t
     end  
   end
-
-  local function nodeSys(exp)
-    return {tag = "sys", code = "1", exp = exp}
-  end
-
+  
   local function hex(n)  
     return tonumber(n, 16)
   end
@@ -128,16 +114,19 @@ local function Interpreter(v, debug)
   local x = lpeg.S("xX")
   local sym = lpeg.R("az", "AZ")
 
-  -- numericals
+  -- Reserved words
+  local reserved = {"return", "while", "for", "done","if", "else", "elseif", "end", "and", "or", "true", "false", "number", "bool"}
+
+  -- Numericals
   local floats = loc.digit^1 * "." * loc.digit^1 / tonumber / node({tag = "number", ["type"] = "number"}, "val") * space
   local scientific = loc.digit^1* ("." * loc.digit^1 + loc.digit^0 )* lpeg.S("eE") * lpeg.P("-")^0 * loc.digit^1 / tonumber / node({tag = "number", ["type"] = "number"}, "val") * space
   local decimals = loc.digit^1 / tonumber / node({tag = "number", ["type"] = "number"}, "val") * (-x) * space
   local hexes = "0" * x * lpeg.C((h + loc.digit)^1) / hex / node({tag = "number", ["type"] = "number"}, "val") * space
   local numerals = hexes + scientific + floats + decimals
+  
+  local prTypes = lpeg.P"number" + "bool"
+  local array = ("[" * prTypes * "]") -- (lpeg.P"[" * "]")^-1 *
 
-  local reserved = {"return", "while", "for", "done","if", "else", "elseif", "end", "and", "or", "true", "false", "number", "bool"}
-
-  local types = lpeg.C(lpeg.P"number" + lpeg.P"bool") * space
 
   local opA = lpeg.C(lpeg.S("+-")) * space -- addition/substraction
   local opM = lpeg.C(lpeg.S("*/%")) * space -- multiplication/division
@@ -155,12 +144,19 @@ local function Interpreter(v, debug)
   local exponent = lpeg.V("exponent")
   local subexpression = lpeg.V("subexpression")
   local expression = lpeg.V("expression")
+  local types = lpeg.V("types")
   local statement = lpeg.V("statement")
   local statements = lpeg.V("statements")
   local bool = (lpeg.P"true" + lpeg.P"false") / node({tag = "bool", ["type"] = "bool"}, "val") * space
   
-  local declaration = types * id * space
-
+  local idx = T"[" * expression * T"]"
+  local declaration = types * id * idx^-1 * space
+  
+  local setvar = id * T"=" * (ternary + expression) / node("assign", "id", "exp")
+  local setindex = id * idx * T"=" * (ternary + expression) / node("setidx", "id", "indx", "exp")
+  local indexed = id * idx / node("getidx", "id", "indx")                   
+  local assignment = setindex + setvar
+  
   local comments = "//" * (lpeg.P(1) - "\n")^0
   local bcommentS = "/*" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentStarted = true; return true end)
   local bcommentE = "*/" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentEnded = true; return true end)
@@ -174,14 +170,15 @@ local function Interpreter(v, debug)
               + T"end"/node("end")
               + T"while" * expression / node("while", "cond")
               + T"done"/node("done")
-              + declaration / node("declaration", "type", "id")
-              + id * T"=" * (ternary + expression) / node("assign", "id", "exp")
-              + pr * expression / nodeSys
+              + declaration / node("declaration", "type", "id", "size")
+              + assignment
+              + pr * expression / node({tag = "sys", code = 1}, "exp")
               + ternary
               + expression,    
     primary = numerals 
               + bool
               + T"(" * expression * T")"
+              + indexed
               + id,
     unary = lpeg.Ct(opUn * primary) /foldUn + primary,    
     exponent = lpeg.Ct(unary * (opE * unary)^0) / foldBin,
@@ -189,7 +186,8 @@ local function Interpreter(v, debug)
     subexpression = lpeg.Ct(term * (opA * term)^0) / foldBin,
     ternary = lpeg.Ct(expression * T"?" * expression * T":" * expression) / foldTernary,
     expression = lpeg.Ct(subexpression * (opC * subexpression)^0) / foldBin,
-    space = (loc.space + comments)^0 * lpeg.P(function (_, p)  maxmatch = p ;return true end)            
+    space = (loc.space + comments)^0 * lpeg.P(function (_, p)  maxmatch = p ;return true end),
+    types = lpeg.C(array + prTypes) * space
   })
 
   local ops = {["+"] = "add", ["-"] = "sub",
@@ -198,12 +196,7 @@ local function Interpreter(v, debug)
                ["&"] = "and", ["|"] = "or"
              }    
   local unops = {["--"] = "dec", ["++"] = "inc", ["-"] = "minus", ["!"] = "not"
-            }
-            
-  local TRUE = 1
-  local FALSE = 0
-  
-  
+            }              
   
   -- fix element in list at position stored in the end of jmpAddress with dif with address o
   local function fixAddress(o)
@@ -240,29 +233,44 @@ local function Interpreter(v, debug)
       if id == r then return true end    
     end  
     return false
-  end
-  
-  local function checkType(t1, t2)
-    if t2 ~= nil and t1 ~= nil and string.gsub(t1, " ","") ~= string.gsub(t2, " ", "")  then
-      error("Type checking error. Expected " .. string.gsub(t1, " ", "") .. " but get " .. string.gsub(t2, " ",""))
-    end
-  end
-
-  -- Get global variable structure
+  end  
+    
+    -- Get global variable structure
   local function getVar(id)
     if Rw(id) then error("Variable "..tostring(id) .. " is a reserved word") end
     local v = vars[id]
     if not v then error("Undefined variable " ..tostring(id)) end
     return v
   end
+
+  local function checkType(t1, t2, m)
+    if t2 ~= nil and t1 ~= nil and string.gsub(t1, " ","") ~= string.gsub(t2, " ", "")  then
+      error(m or "" .. "Type checking error. Expected " .. string.gsub(t1, " ", "") .. " but get " .. string.gsub(t2, " ",""))
+    end
+  end
   
-  -- Init global variable, returns index in list
-  local function init(id, t)
+  -- TODO: merge with checkType
+  local function checkAssignType(id, t2)    
+    if t2 == nil or id == nil then return end
+    local v = getVar(id.val)    
+    if string.gsub(v.type, "[%[%]]","") ~= string.gsub(t2, " ", "")  then
+      error("Type checking error. Expected " .. string.gsub(v.type, "[%[%]]", "") .. " but get " .. string.gsub(t2, " ",""))
+    end
+  end    
+  
+  -- Declare global variable, returns index in list
+  local function init(id, t, size)
     local s = vars[id]
     if s then 
       checkType(s["type"], t)
       return s.val
     end
+    if isArrayType(t) and not size then
+      error("Array size must be specified in declaration")
+    end  
+    if size then
+      checkType("number", size.type, "Array size must be a number\n")
+    end  
     num = nvars + 1
     vars[id] = {val = num, ["type"] = t}
     nvars = num
@@ -288,6 +296,11 @@ local function Interpreter(v, debug)
       checkType("bool", t)
       addCode("push")
       addCode(ast.val == "true" and TRUE or FALSE)
+    elseif ast.tag == "getidx" then
+      checkType("number", ast.indx.type, "Array index must be a number\n")
+      codeExp(ast.indx, ast.indx.type)
+      addCode("loadat")
+      addCode(getVar(ast.id.val).val)
     elseif ast.tag == "var" then
       addCode("load")
       addCode(getVar(ast.val).val)
@@ -345,11 +358,22 @@ local function Interpreter(v, debug)
   -- Codify Statement
   local function codeStatement(ast)
     if ast.tag == "declaration" then
+      local v = init(ast.id.val, ast.type, ast.size)
+      if ast.size then
+        codeExp(ast.size) -- push size number on stack
+      end  
       addCode("init")
-      addCode(init(ast.id.val, ast.type))
+      addCode(v)
       addCode(ast.type) -- type as string for now, change to number later
+    elseif ast.tag == "setidx" then
+      checkAssignType(ast.id, ast.exp.type)
+      checkType("number", ast.indx.type, "Array index must be a number\n")
+      codeExp(ast.exp)
+      codeExp(ast.indx)
+      addCode("storeat") -- top of stack index in array, and after that value
+      addCode(store(ast.id.val))
     elseif ast.tag == "assign" then
-      checkType(ast.id.type, ast.exp.type)
+      checkAssignType(ast.id, ast.exp.type)
       codeExp(ast.exp)
       addCode("store")
       addCode(store(ast.id.val))    
@@ -493,7 +517,15 @@ end
 -- Lazarus VM
 local function VM(debug)
   -- Lazarus VM built-in functions
-  local syscalls = { ["1"] = function (exp) print(tostring(exp)) end }
+  local function sysprint(exp)
+    if type(exp) == "table" then
+      print("Array")
+      ut.printtable(exp)
+    else  
+      print(tostring(exp))
+    end  
+  end  
+  local syscalls = { ["1"] = sysprint }
   -- internal data structures
   local stack = ut.Stack()
   local mem = {}
@@ -507,6 +539,13 @@ local function VM(debug)
   local function revTof(b)
     return b and 0 or 1
   end
+  
+  local function getIndx(m)
+    s = stack.pop() -- get size from stack
+    s = math.tointeger(s)
+    if not s or s <= 0 then error(m) end          
+    return s
+  end
 
   local function run(code)
     local pc = 1
@@ -517,21 +556,46 @@ local function VM(debug)
         stack.push(code[pc])
       elseif code[pc] == "load" then
          pc = pc + 1
-         local v = mem[code[pc]].val
+         local v = mem[code[pc]].val --TODO: when compile error in sequence, mem structure may be not initialized
          if v == nil then error("Variable is not initialized")  end
          stack.push(v)
       elseif code[pc] == "init" then
         pc = pc + 1
         num = pc
         pc = pc + 1        
-        mem[code[num]] = {["type"] = code[pc]}
+        local t = code[pc]
+        local s = nil
+        if isArrayType(t) then s = getIndx("Size must be a positive number") end
+        mem[code[num]] = {["type"] = t, ["size"] = s}
+      elseif code[pc] == "storeat" then
+        -- top of stack index in array, and after that value
+        local i = getIndx("Index must be a positive number")
+        local v = stack.pop()
+        pc = pc + 1
+        local size = mem[code[pc]].size --TODO: when compile error in sequence, mem structure may be not initialized
+        if (i > size) then
+          error("Index " .. tostring(i) .. " is out of range. Must be <= " .. tostring( size))
+        end
+        local a = mem[code[pc]].val or {}
+        a[i] = v
+        mem[code[pc]].val = a
+      elseif code[pc] == "loadat" then
+        local i = getIndx("Index must be a positive number")
+        pc = pc + 1
+        local size = mem[code[pc]].size --TODO: when compile error in sequence, mem structure may be not initialized
+        if (i > size) then
+          error("Index " .. tostring(i) .. " is out of range. Must be <= " .. tostring( size))
+        end
+        local v = mem[code[pc]].val[i]
+        if v == nil then error("Element is not initialized at index ".. i) end -- TODO: Return NULL value instead
+        stack.push(v)
       elseif code[pc] == "store" then
          pc = pc + 1
-         mem[code[pc]].val = stack.pop()
+         mem[code[pc]].val = stack.pop() --TODO: when compile error in sequence, mem structure may be not initialized
       elseif code[pc] == "syscall" then
          pc = pc + 1        
          opcode = code[pc]
-         syscalls[opcode](stack.pop())
+         syscalls[tostring(opcode)](stack.pop())
       elseif code[pc] == "add" then
         local op2 = stack.pop()
         local op1 = stack.pop()

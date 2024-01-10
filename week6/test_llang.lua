@@ -130,7 +130,7 @@ function test_compile_if()
   lu.assertEquals(l[15], "load", "load x")  
   lu.assertEquals(l[16], 1, "load x")  
   lu.assertEquals(l[17], "syscall", "print")  
-  lu.assertEquals(l[18], "1", "print")  
+  lu.assertEquals(l[18], 1, "print")  
   lu.assertEquals(l[19], "noop", "end of if control statement")  
 end
 
@@ -145,6 +145,30 @@ function test_compile_and()
   lu.assertEquals(l[5], "push", "compile push code")
   lu.assertEquals(l[6], 2, "compile constant 2")
   lu.assertEquals(l[7], "noop", "compile jump address")  
+end
+
+function test_compile_array()
+  local ip = lang.Interpreter()
+  local l = ip.interpret("[number] y[1 + 3]")
+  --[[
+        1: push
+        2: 1
+        3: push
+        4: 3
+        5: add
+        6: init
+        7: 1
+        8: [number]
+  --]]
+  lu.assertEquals(#l, 8, "compile array declaration")
+  lu.assertEquals(l[1], "push", "compile push code")
+  lu.assertEquals(l[2], 1, "compile constant 1")
+  lu.assertEquals(l[3], "push", "compile push code")
+  lu.assertEquals(l[4], 3, "compile constant 3")
+  lu.assertEquals(l[5], "add", "compile add")
+  lu.assertEquals(l[6], "init", "declaration code")
+  lu.assertEquals(l[7], 1, "compile address in memory")
+  lu.assertEquals(l[8], "[number]", "compile type symbol")  
 end
 
 function test_syntax_error()
