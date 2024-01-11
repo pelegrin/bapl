@@ -151,14 +151,13 @@ function fileExists(path)
   return file ~= nil
 end
 
---[[
+
 function readall(filename)
   local fh = io.open(filename, "rb")
   local contents = fh:read(_VERSION <= "Lua 5.2" and "*a" or "a")
   fh:close()
   return contents
 end
---]]
 
 Utils.printtable = printtable
 Utils.printt = printt
@@ -168,6 +167,7 @@ Utils.errorHandler = errorHandler
 Utils.syntaxErrorHandler = syntaxErrorHandler
 Utils.Debug = Debug
 Utils.fileExists = fileExists
+Utils.readall = readall
 
 return Utils
 

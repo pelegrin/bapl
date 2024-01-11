@@ -7,9 +7,22 @@
 3. Install LPeg
 4. (Optional) To run test cases, install luaunit
 
-## Compile and run Lazarus source code file
-For example: 
->./lazarus numbers.lz
+## Using the tool
+To run lazarus with source file or in interactive mode use the following command
+` ./lazarus [options] <source_file>` or  `./lazarus -i ` (for interactive mode)
+  where options are:
+* -i : Interactive mode. Executes source file if provided and switch to interactive mode
+* -d | -debug : Enabling printing internal data structures
+* -c : Compile mode, compile source file from path and saves it with .lzc extension
+* -h : Get this information
+* -v : Print interpreter version
+Also possible to run a source file and then switch to interactive mode.
+To do that provide both path to source file and -i switch. It gives the benefit to have initialized and assigned variables from source file in interactive mode
+In interactive mode, special commands are avaliable for debuging, if -d option was not provided.
+List of recognise commands are
+-    :s - print VM stack
+-    :m - print VM memory
+-    :vars - print Interpreter internal vars structure
 
 ## Running tests
 Run test cases from command line

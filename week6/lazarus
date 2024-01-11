@@ -3,37 +3,75 @@
 local laz = require "llang"
 local ut = require "utils"
 
-local function usage()
-  return "Usage: " .. arg[0] .. " [options] path/<source_file> | ".. arg[0] .. " -i (for interactive mode)"
+local _version_ = "Lazarus interpreter v.0.1 ©2024 GoodCode"
+
+local function Params(args)
+  local params = {}
+  local path = nil
+  
+  for i = 1, #args do
+    if args[i]:find("^-") then 
+      params[args[i]] = true 
+    elseif not path then
+      path = args[i] 
+    end
+  end
+  
+  local function findparam(p)
+    for k,v in pairs(params) do
+      if p == k then return v end
+    end
+    return false
+  end
+    
+  local function getpath()
+    if path and ut.fileExists(path) then return path end
+    return nil
+  end
+  
+  return {
+    isInteractive = findparam("-i"),
+    isDebug = findparam("-d") or findparam("-debug"),
+    isCompile = findparam("-c"),
+    isHelp = findparam("-h") or findparam("-help"),
+    isVersion = findparam("-v"),
+    path = getpath()
+  }
 end
 
-local isInteractive = arg[1] == "-i"
-local isCompile = arg[1] == "-c"
-local isDebug = #arg > 1 and arg[1] == "-debug" or arg[1] == "-d" or isInteractive
-local path = not isInteractive and #arg > 0 and arg[#arg] or #arg > 1 and table.concat(arg, " ", 2)
+local function usage()
+  return "Usage: " .. arg[0] .. " [options] path/<source_file> | ".. arg[0] .. " -i " .. [[
+  where options:
+      -i : Interactive mode. Executes source file if provided and switch to interactive mode
+      -d | -debug : Enabling printing internal data structures
+      -c : Compile mode, compile source file from path and saves it with .lzc extension
+      -h : Get this information
+      -v : Print interpreter version      
+  ]]
+end
 
-if not path and not isInteractive then 
+local p = Params(arg)
+
+if not p.path and not p.isInteractive or p.isHelp then 
+  print(_version_)
   print(usage())
   os.exit(1)
 end
 
-if not isInteractive and not ut.fileExists(path) then
-  print ("LAZ1 file ".. path .. " not found")
-  os.exit(1)
-end
+if p.isVersion then print(_version_) end
 
-if isCompile then
-  laz.Compiler().compile(path)
+if p.isCompile then
+  laz.Compiler().compile(p.path)
   os.exit(0)
 end
 
 
-local d = ut.Debug(isDebug)
-local ip = laz.Interpreter(nil, isDebug)
-local vm = laz.VM(isDebug)
+local d = ut.Debug(p.isDebug)
+local ip = laz.Interpreter(nil, p.isDebug)
+local vm = laz.VM(p.isDebug)
 
-if not isInteractive then
-  local code = ip.interpretf(path)
+if not p.isInteractive then
+  local code = ip.interpretf(p.path)
   d.debug(print, "Code")
   d.debug(ut.printtable, code)
   status, err =  pcall(vm.run, code)
@@ -45,8 +83,8 @@ if not isInteractive then
   os.exit(0)
 end  
 
-local function debugPrint(isDebug)
-  if not isDebug then return end
+local function debugPrint()
+  if not p.isDebug then return end
   d.debug(print, "Stack after calculations")
   vm.printStack() 
   d.debug(print, "Vars in interpreter")
@@ -56,27 +94,66 @@ local function debugPrint(isDebug)
 end
 
 -- Interactive mode
+local function execute(l, line)
+  local codeList, err = ip.interpret(line)
+  if err then return end    
+  -- trick with temporary buffer for compile complete control statement
+  if codeList == nil and err == nil then return end
+  d.debug(print, "Code List")
+  d.debug(ut.printtable, codeList)    
+  status, err =  pcall(vm.run, codeList)
+  status = status or ut.errorHandler("VM error in line: ".. l .. "\n" .. line, err)
+  debugPrint()
+end  
 
+local commands = {
+  ["s"] = vm.printStack,
+  ["m"] = vm.printMemory,
+  ["vars"] = ip.printVars  
+}
+
+local function usage_commands()
+  local text = [[
+  Lazarus interactive commands
+    :s - print VM stack
+    :m - print VM memory
+    :vars - print Interpreter internal vars structure
+  ]]
+  print(text)
+end
+-- execute lazarus command if line is in command format
+local function executeCommand(line)
+  if not line then return false end
+  local c = line:match("^:(%a+)")
+  if c then 
+    local exc = commands[c]
+    if not exc then
+      print("Command ".. c .. " is not recognized")
+      usage_commands()
+    else
+      exc()
+    end  
+    return true
+  end
+  return false
+end  
+
+-- check if we have path, execute file first then switch to interactive mode
+local lns = p.path and ut.readall(p.path)
 local l = 1
-local line = io.stdout:write(string.format("%d > ", l)) and io.read()
 
+--executes file first if exists
+for line in string.gmatch(lns,'[^\r\n]+') do
+  execute(l, line)
+  l = l + 1
+end
+
+--interactive mode
+local line = io.stdout:write(string.format("lazarus line:%d > ", l)) and io.read()
 while line do    
-    local codeList, err = ip.interpret(line)
-    if err then goto next end    
-    -- trick with temporary buffer for compile complete control statement
-    if codeList == nil and err == nil then 
+    if not executeCommand(line) then      
+      execute(l, line)
       l = l + 1
-      io.stdout:write(string.format("%d continue.. > ", l))
-      goto buffnext
     end
-    d.debug(print, "Code List")
-    d.debug(ut.printtable, codeList)    
-    status, err =  pcall(vm.run, codeList)
-    status = status or ut.errorHandler("VM error in line: ".. l .. "\n" .. line, err)
-    debugPrint(isDebug)
-    ::next::
-    l = l + 1
-    io.stdout:write(string.format("%d > ", l))
-    ::buffnext::
-    line = io.read()
+    line = io.stdout:write(string.format("lazarus line:%d > ", l)) and io.read()
 end
