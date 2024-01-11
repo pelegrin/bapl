@@ -139,7 +139,7 @@ local function executeCommand(line)
 end  
 
 -- check if we have path, execute file first then switch to interactive mode
-local lns = p.path and ut.readall(p.path)
+local lns = p.path and ut.readall(p.path) or ""
 local l = 1
 
 --executes file first if exists

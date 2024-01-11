@@ -10,8 +10,8 @@ local function I (msg)
 end
 --]]
 
-local TRUE = 1
-local FALSE = 0
+local TRUE = true
+local FALSE = false
   
 local function isArrayType(t)
   return string.find(t, "%[")
@@ -24,6 +24,20 @@ local function Interpreter(v, debug)
   local jmpAddress = ut.List() -- list of addresses marks the address to jmp from cycle or if statement
   local cAddress = ut.List() -- list of addresses marks the condition of cycle, to this address should jump at end of cycle
   local buffer = ut.List() -- code buffer for interactive mode and processing control structures
+  --[[
+  -- special structure that keeps declaration for one processing line for rollback
+    using in case of compilation error in sequence.    
+  --]]
+  local declared = ut.List() 
+  --Remove declared variables from vars structure
+  local function rollback_declared()
+    local i = 0
+    for _,v in ipairs(declared.getAll()) do
+      vars[v] = nil
+    end
+    nvars = nvars - i
+    declared.clear()
+  end  
   
   -- Debug facilities
   local isDebug = debug or false
@@ -274,6 +288,7 @@ local function Interpreter(v, debug)
     num = nvars + 1
     vars[id] = {val = num, ["type"] = t}
     nvars = num
+    declared.add(id)
     return num
   end
   
@@ -374,7 +389,7 @@ local function Interpreter(v, debug)
       addCode(store(ast.id.val))
     elseif ast.tag == "assign" then
       checkAssignType(ast.id, ast.exp.type)
-      codeExp(ast.exp)
+      codeExp(ast.exp, ast.exp.type)
       addCode("store")
       addCode(store(ast.id.val))    
     elseif ast.tag == "seq" then
@@ -432,6 +447,8 @@ local function Interpreter(v, debug)
           status, err = pcall(codeStatement, ast)
           if not status then
             ut.errorHandler("Compilation error in line: ".. line .. "\n" ..err)
+            --rollback declarations
+            rollback_declared()
             return {}, err
           end
     end
@@ -446,8 +463,10 @@ local function Interpreter(v, debug)
       buffer.add(code)
       local r = buffer.getAll()
       buffer.clear()
+      declared.clear()
       return r
     end  
+    declared.clear()
     return code.getAll()
   end    
   
@@ -466,16 +485,24 @@ local function Interpreter(v, debug)
           status, err = pcall(codeStatement, ast)
           if not status then
             ut.errorHandler("Compilation error in line ".. l .. ": " .. line .. "\n" .. err)
+            -- rollback declaration
+            rollback_declared()
             return {}, err
           end          
       end
       l = l + 1
       line = fh:read("*line")
     end
-    fh:close()
-    
-    if jmpAddress.lastPosition() > 0 then error("if statement without closing end") end
-    if cAddress.lastPosition() > 0 then error("while statement without closing done") end        
+    fh:close()    
+    if jmpAddress.lastPosition() > 0 then
+      rollback_declared()
+      error("if statement without closing end")
+    end
+    if cAddress.lastPosition() > 0 then
+      rollback_declared()
+      error("while statement without closing done")
+    end        
+    declared.clear()
     return code.getAll()
   end
   
@@ -556,7 +583,7 @@ local function VM(debug)
         stack.push(code[pc])
       elseif code[pc] == "load" then
          pc = pc + 1
-         local v = mem[code[pc]].val --TODO: when compile error in sequence, mem structure may be not initialized
+         local v = mem[code[pc]].val
          if v == nil then error("Variable is not initialized")  end
          stack.push(v)
       elseif code[pc] == "init" then
@@ -572,7 +599,7 @@ local function VM(debug)
         local i = getIndx("Index must be a positive number")
         local v = stack.pop()
         pc = pc + 1
-        local size = mem[code[pc]].size --TODO: when compile error in sequence, mem structure may be not initialized
+        local size = mem[code[pc]].size
         if (i > size) then
           error("Index " .. tostring(i) .. " is out of range. Must be <= " .. tostring( size))
         end
@@ -582,7 +609,7 @@ local function VM(debug)
       elseif code[pc] == "loadat" then
         local i = getIndx("Index must be a positive number")
         pc = pc + 1
-        local size = mem[code[pc]].size --TODO: when compile error in sequence, mem structure may be not initialized
+        local size = mem[code[pc]].size
         if (i > size) then
           error("Index " .. tostring(i) .. " is out of range. Must be <= " .. tostring( size))
         end
@@ -591,7 +618,7 @@ local function VM(debug)
         stack.push(v)
       elseif code[pc] == "store" then
          pc = pc + 1
-         mem[code[pc]].val = stack.pop() --TODO: when compile error in sequence, mem structure may be not initialized
+         mem[code[pc]].val = stack.pop()
       elseif code[pc] == "syscall" then
          pc = pc + 1        
          opcode = code[pc]
