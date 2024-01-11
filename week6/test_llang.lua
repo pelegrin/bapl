@@ -195,9 +195,9 @@ function test_boolean()
   local ip = lang.Interpreter()
   local vm = lang.VM()
   local l = ip.interpret("true")
-  lu.assertEquals(vm.run(l), 1, "evaluate true")
+  lu.assertEquals(vm.run(l), lang.TRUE, "evaluate true")
   local l = ip.interpret("false")
-  lu.assertEquals(vm.run(l), 0, "evaluate false")
+  lu.assertEquals(vm.run(l), lang.FALSE, "evaluate false")
 
 end
 
