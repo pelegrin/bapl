@@ -1,0 +1,160 @@
+#! /usr/bin/env lua
+
+local laz = require "llang"
+local ut = require "utils"
+local VM = require "vm"
+
+local _version_ = "Lazarus interpreter v.0.1 ©2024 GoodCode"
+
+local function Params(args)
+  local params = {}
+  local path = nil
+  
+  for i = 1, #args do
+    if args[i]:find("^-") then 
+      params[args[i]] = true 
+    elseif not path then
+      path = args[i] 
+    end
+  end
+  
+  local function findparam(p)
+    for k,v in pairs(params) do
+      if p == k then return v end
+    end
+    return false
+  end
+    
+  local function getpath()
+    if path and ut.fileExists(path) then return path end
+    return nil
+  end
+  
+  return {
+    isInteractive = findparam("-i"),
+    isDebug = findparam("-d") or findparam("-debug"),
+    isCompile = findparam("-c"),
+    isHelp = findparam("-h") or findparam("-help"),
+    isVersion = findparam("-v"),
+    path = getpath()
+  }
+end
+
+local function usage()
+  return "Usage: " .. arg[0] .. " [options] path/<source_file> | ".. arg[0] .. " -i " .. [[
+  where options:
+      -i : Interactive mode. Executes source file if provided and switch to interactive mode
+      -d | -debug : Enabling printing internal data structures
+      -c : Compile mode, compile source file from path and saves it with .lzc extension
+      -h : Get this information
+      -v : Print interpreter version      
+  ]]
+end
+
+local p = Params(arg)
+
+if p.isVersion then 
+  print(_version_)
+end
+
+if not p.path and not p.isInteractive or p.isHelp then 
+  print(_version_)
+  print(usage())
+  os.exit(1)
+end
+
+local d = ut.Debug(p.isDebug)
+local ip = laz.Interpreter(p.isDebug)
+local vm = VM(p.isDebug)
+
+if not p.isInteractive then
+  local code = ip.interpretf(p.path)
+  d.debug(print, "Code")
+  d.debug(ut.printtable, code)
+  status, err =  pcall(vm.run, code)
+  status = status or ut.errorHandler("VM error: ".. err)
+  d.debug(print, "VM stack")
+  d.debug(vm.printStack)
+  d.debug(print, "VM memory")
+  d.debug(vm.printMemory)
+  os.exit(0)
+end  
+
+local function debugPrint()
+  if not p.isDebug then return end
+  d.debug(print, "Stack after calculations")
+  vm.printStack() 
+  d.debug(print, "Vars in interpreter")
+  ip.printVars()
+  d.debug(print, "Memory")
+  vm.printMemory()
+end
+
+-- Interactive mode
+local function execute(l, line)
+  local codeList, err = ip.interpret(line)
+  if err then return end    
+  -- trick with temporary buffer for compile complete control statement
+  if codeList == nil and err == nil then return end
+  d.debug(print, "Code List")
+  d.debug(ut.printtable, codeList)    
+  status, err =  pcall(vm.run, codeList)
+  status = status or ut.errorHandler("VM error in line: ".. l .. "\n" .. line, err)
+  debugPrint()
+end  
+
+local commands = {
+  ["s"] = vm.printStack,
+  ["m"] = vm.printMemory,
+  ["vars"] = ip.printVars,
+  ["buff"] = ip.printBuff,
+  ["params"] = ip.printFrame,
+}
+
+local function usage_commands()
+  local text = [[
+  Lazarus interactive commands
+    :s - print VM stack
+    :m - print VM memory
+    :vars - print Interpreter internal vars structure
+    :buff - show Interpreter buffer
+    :params - show Interpreter param structure
+  ]]
+  print(text)
+end
+-- execute lazarus command if line is in command format
+local function executeCommand(line)
+  if not line then return false end
+  local c = line:match("^:(%a+)")
+  if c then 
+    local exc = commands[c]
+    if not exc then
+      print("Command ".. c .. " is not recognized")
+      usage_commands()
+    else
+      exc()
+    end  
+    return true
+  end
+  return false
+end  
+
+-- check if we have path, execute file first then switch to interactive mode
+local lns = p.path and ut.readall(p.path) or ""
+local l = 1
+
+--executes file first if exists
+for line in string.gmatch(lns,'[^\r\n]+') do
+  execute(l, line)
+  l = l + 1
+end
+
+--interactive mode
+local line = io.stdout:write(string.format("lazarus line:%d > ", l)) and io.read()
+while line do    
+    if not executeCommand(line) then      
+      execute(l, line)
+      l = l + 1
+    end
+    line = io.stdout:write(string.format("lazarus line:%d > ", l)) and io.read()
+end
