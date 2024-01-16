@@ -1,0 +1,7 @@
+/*
+This is block comments
+*/
+
+number x, x = 0, number y, y = 1, number z, z = x + y // x = 5, f some comments
+@z // print 1
+

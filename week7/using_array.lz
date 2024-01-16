@@ -1,0 +1,5 @@
+number i, i = 5, [number] x[i]
+while i > 0
+   x[i] = i + 5, i = i - 1
+done
+@x
