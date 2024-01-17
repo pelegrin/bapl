@@ -65,7 +65,10 @@ end
 
 local d = ut.Debug(p.isDebug)
 local ip = laz.Interpreter(p.isDebug)
-local vm = VM(p.isDebug)
+local mem = {}
+local stack = ut.Stack()
+local vm = VM(stack, mem, p.isDebug)
+
 
 if not p.isInteractive then
   local code = ip.interpretf(p.path)
@@ -73,22 +76,8 @@ if not p.isInteractive then
   d.debug(ut.printtable, code)
   status, err =  pcall(vm.run, code)
   status = status or ut.errorHandler("VM error: ".. err)
-  d.debug(print, "VM stack")
-  d.debug(vm.printStack)
-  d.debug(print, "VM memory")
-  d.debug(vm.printMemory)
   os.exit(0)
 end  
-
-local function debugPrint()
-  if not p.isDebug then return end
-  d.debug(print, "Stack after calculations")
-  vm.printStack() 
-  d.debug(print, "Vars in interpreter")
-  ip.printVars()
-  d.debug(print, "Memory")
-  vm.printMemory()
-end
 
 -- Interactive mode
 local function execute(l, line)
@@ -100,7 +89,6 @@ local function execute(l, line)
   d.debug(ut.printtable, codeList)    
   status, err =  pcall(vm.run, codeList)
   status = status or ut.errorHandler("VM error in line: ".. l .. "\n" .. line, err)
-  debugPrint()
 end  
 
 local commands = {

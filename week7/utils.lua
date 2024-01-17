@@ -24,7 +24,7 @@ end
 
 local function errorHandler(message, err)
   print("LZ2 ".. tostring(message).. " \n" .. " ".. tostring(err) .."\n")
-  os.exit(1)
+--  os.exit(1)
 end
 
 local function syntaxErrorHandler(err) 
@@ -58,6 +58,7 @@ function Stack()
   end
   
   local function printStack()
+    print("Stack")
     printtable(self)
   end
   
@@ -115,6 +116,38 @@ function List()
     return r
   end
   
+  local function getSection(from, to)
+    if from <= 0 or to > lastPosition() then error("Section from list is out of range from " .. tostring(from) .. " to " .. tostring(to)) end
+    if from > to then error"Upper bound should be more then lower bound" end
+    local r = {}
+    local p = 1
+    for i = from, to do
+      r[p] = l[i]
+      p = p + 1
+    end
+    return r
+  end
+  
+  local function cutSection(from, to)
+    local sec = getSection(from, to)
+    local p = from
+    local last = #l
+    for i = from, last do
+      if i <= to then 
+        l[i] = nil
+      else
+         l[p] = l[i]
+         l[i] = nil
+         p = p + 1
+      end
+     end 
+     return sec
+   end  
+  
+  local function getLast()
+    return l[#l]
+  end
+  
   local function isEmpty()
     return #l == 0
   end
@@ -127,8 +160,11 @@ function List()
     get = get,
     add = add,
     lastPosition = lastPosition,
+    getLast = getLast,
     getAll = getAll,
     replace = replace,
+    getSection = getSection,
+    cutSection = cutSection,
     removeLast = removeLast,
     isEmpty = isEmpty,
     clear = clear
@@ -164,6 +200,19 @@ local function isArrayType(t)
   return string.find(t, "%[")
 end
 
+-- deep copy implementation
+local function copyTable(source, dest)
+  for i,v in pairs(source) do
+    if type(v) == "table" then      
+      dest[i] = {}
+      copyTable(v, dest[i])
+     else       
+       dest[i] = v
+     end
+  end
+end  
+  
+
 Utils.printtable = printtable
 Utils.printt = printt
 Utils.Stack = Stack
@@ -174,6 +223,7 @@ Utils.Debug = Debug
 Utils.fileExists = fileExists
 Utils.readall = readall
 Utils.isArrayType = isArrayType
+Utils.copyTable = copyTable
 
 return Utils
 

@@ -1,8 +1,8 @@
 local ut = require "utils"
 
 -- Lazarus VM
-local function VM(debug)
-  -- Lazarus VM built-in functions
+local function VM(stack, mem, debug)  
+  -- Lazarus VM built-in functions  
   local function sysprint(exp)
     if type(exp) == "table" then
       print("Array")
@@ -13,8 +13,6 @@ local function VM(debug)
   end  
   local syscalls = { ["1"] = sysprint }
   -- internal data structures
-  local stack = ut.Stack()
-  local mem = {}
   local isDebug = debug or false
   local d = ut.Debug(isDebug)
 
@@ -36,15 +34,52 @@ local function VM(debug)
   local function run(code)
     local pc = 1
     while pc <= #code do
-      d.debug(stack.printStack)
-      if code[pc] == "push" then
+      if code[pc] == "funcdef" then
+        pc = pc + 1
+        local n = pc
+        pc = pc + 1
+        mem[code[n]] = {["type"] = "func", params = code[pc], forward = nil}
+        pc = pc + 1
+        local funccode = ut.List()
+        while code[pc] ~= "endf" do
+          funccode.add(code[pc])
+          pc = pc + 1
+        end
+        mem[code[n]].code = funccode.getAll()
+      elseif code[pc] == "funcfdef" then
+        pc = pc + 1
+        mem[code[pc]] = {["type"] = "func", forward = true}
+      elseif code[pc] == "call" then
+        pc = pc + 1
+        local adr = code[pc]
+        local funccode = mem[adr].code
+        local forward = mem[adr].forward
+        if not funccode and not forward then error("Function is not initialized") end
+        local numofparams = mem[adr].params or 0
+        local i = numofparams
+        local m = {}
+        ut.copyTable(mem, m)
+        -- add parameters in memory with minus indecies
+        while i > 0 do
+          m[-i] = {val = stack.pop()}
+          i = i - 1
+        end
+        local vm = VM(stack, m, debug)
+        stack.push(vm.run(funccode)) -- push return value on stack
+      elseif code[pc] == "ret" then return stack.pop() -- return top of the stack
+      elseif code[pc] == "push" then
         pc = pc + 1
         stack.push(code[pc])
       elseif code[pc] == "load" then
          pc = pc + 1
          local v = mem[code[pc]].val
-         if v == nil then error("Variable is not initialized")  end
-         stack.push(v)
+         if v == nil then
+           local t = mem[code[pc]]["type"]
+           if t ~= "func" then error("Variable is not initialized") end
+           stack.push(code[pc]) -- function reference on stack
+         else
+           stack.push(v)
+         end         
       elseif code[pc] == "init" then
         pc = pc + 1
         num = pc
@@ -77,7 +112,14 @@ local function VM(debug)
         stack.push(v)
       elseif code[pc] == "store" then
          pc = pc + 1
-         mem[code[pc]].val = stack.pop()
+         local v = mem[code[pc]]
+         if v["type"] == "func" then
+           local ref = stack.pop()
+           v.code = mem[ref].code -- copy code to referenced function
+           v.params = mem[ref].params
+         else  
+          v.val = stack.pop()
+         end 
       elseif code[pc] == "syscall" then
          pc = pc + 1        
          opcode = code[pc]
@@ -184,7 +226,6 @@ local function VM(debug)
       end    
       pc = pc + 1
     end
-    return stack.pop() -- return top of the stack
   end
   
   -- Debug functions

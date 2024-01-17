@@ -3,21 +3,23 @@ local ut = require "utils"
 
 local lang = {}
 
---[[
+
 -- LPeg Debug function
 local function I (msg)
   return lpeg.P(function () print(msg); return true end)
 end
---]]
+
 
 local TRUE = true
 local FALSE = false
   
 local function Interpreter(debug)  
-  local vars = v or {}
+  local vars = {}
   local nvars = 0
   local params = ut.List()
-  local fdeclared = ut.List() -- store function name when declaration happened, removed when return occurs.
+  -- stores function name when declaration happened, empty when no active function declaration
+  -- layout: { 1: id, cAddress = List() copy from global scope, jmpAddress = List() copy from global scope
+  local fdeclared = ut.List()
   local code = ut.List()
   local jmpAddress = ut.List() -- list of addresses marks the address to jmp from cycle or if statement
   local cAddress = ut.List() -- list of addresses marks the condition of cycle, to this address should jump at end of cycle
@@ -94,7 +96,7 @@ local function Interpreter(debug)
     local tree = lst[1]
     for i = 2, #lst do
       tree = { tag = "seq", s1 = tree, s2 = lst[i] }
-    end  
+    end
     return tree
   end
   
@@ -110,8 +112,6 @@ local function Interpreter(debug)
   end
   
   local function foldFuncCall(lst)
-    print("FuncCall")
-    ut.printtable(lst)
     tree = { tag = "call", id = lst[1], params = {}}
     local p = 1
     for i = 2, #lst do
@@ -156,7 +156,15 @@ local function Interpreter(debug)
   local sym = lpeg.R("az", "AZ")
 
   -- Reserved words
-  local reserved = {"return", "while", "for", "done","if", "else", "elseif", "end", "and", "or", "true", "false", "number", "bool", "func"}
+  local reserved = {"return", "while", "for", "done", "elseif", "if", "else" , "end", "and", "or", "true", "false", "number", "bool", "func"}
+  
+  local alpha = lpeg.R("AZ", "az")
+  local digit = lpeg.R("09")
+  local alphanum = alpha + digit
+  
+  local function Res(t)
+    return t * -alphanum * space
+  end
 
   -- Numericals
   local floats = loc.digit^1 * "." * loc.digit^1 / tonumber / node({tag = "number", ["type"] = "number"}, "val") * space
@@ -199,28 +207,28 @@ local function Interpreter(debug)
   local indexed = id * idx / node("getidx", "id", "indx")                   
   local assignment = setindex + setvar
   
-  local comments = "//" * (lpeg.P(1) - "\n")^0
+  local comments = "//" * (lpeg.P(1) - "\n")^0 
   local bcommentS = "/*" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentStarted = true; return true end)
   local bcommentE = "*/" * (lpeg.P(1))^0 * lpeg.P(function(_,_) bCommentEnded = true; return true end)
   
   local funcdef = lpeg.V("funcdef")
-  local funcall = lpeg.V("funcall")
+  local funcall = lpeg.V("funcall")  
 
   local grammar = lpeg.P({"prog",
-    prog = space * bcommentS^-1 * bcommentE^-1 * funcdef + statements * -1,    
-    statements = space * lpeg.Ct(statement * (T"," * (statement + ""))^0)/ foldSts,    
-    statement = T"return" * expression / node("return", "val")
-              + T"if" * expression / node("if", "cond") 
-              + T"elseif" * expression / node("elseif", "cond") 
-              + T"else"/ node("else")
-              + T"end"/node("end")
-              + T"while" * expression / node("while", "cond")
-              + T"done"/node("done")
+    prog = space * funcdef + space * statements * -1 + space * bcommentS^-1 * bcommentE^-1,
+    statements = lpeg.Ct(statement * (T"," * (statement))^0) / foldSts,    
+    statement = Res"return" * expression / node("return", "val")
+              + Res"if" * expression / node("if", "cond") 
+              + Res"else"/ node("else")
+              + Res"elseif" * expression / node("elseif", "cond") 
+              + Res"end"/node("end")
+              + Res"while" * expression / node("while", "cond")
+              + Res"done"/node("done")
               + declaration / node("declaration", "type", "id", "size")
               + assignment
               + pr * expression / node({tag = "sys", code = 1}, "exp")
               + ternary
-              + expression,    
+              + expression,
     primary = numerals 
               + bool
               + funcall
@@ -233,10 +241,15 @@ local function Interpreter(debug)
     subexpression = lpeg.Ct(term * (opA * term)^0) / foldBin,
     ternary = lpeg.Ct(expression * T"?" * expression * T":" * expression) / foldTernary,
     expression = lpeg.Ct(subexpression * (opC * subexpression)^0) / foldBin,
-    space = (loc.space + comments)^0 * lpeg.P(function (_, p)  maxmatch = p ;return true end),    
+    space = (lpeg.S(" \t\n") + comments)^0
+                  * lpeg.P(function (_, p)
+                            maxmatch = math.max(maxmatch, p);
+                            return true
+                          end),    
     types = lpeg.C(array + prTypes) * space,
-    funcdef = lpeg.Ct(types * T"func" * id * T"(" * (types * id)^-1 * (T"," * (types * id))^0 * T")") / foldFunc  + lpeg.Ct(types * T"func" * id ) / foldForwardFunc,
-    funcall = lpeg.Ct(id * T "(" * expression ^-1 * (T"," * expression)^0 * T")") / foldFuncCall
+    funcdef = lpeg.Ct(types * Res"func" * id * T"(" * (types * id)^-1 * (T"," * (types * id))^0 * T")") / foldFunc
+             + lpeg.Ct(types * Res"func" * id ) / foldForwardFunc,
+    funcall = lpeg.Ct(id * T"(" * expression ^-1 * (T"," * expression)^0 * T")") / foldFuncCall
   })
 
   local ops = {["+"] = "add", ["-"] = "sub",
@@ -248,9 +261,8 @@ local function Interpreter(debug)
             }              
   
   -- fix element in list at position stored in the end of jmpAddress with dif with address o
-  local function fixAddress(o)
-    local adr = jmpAddress.removeLast()
-    if adr == nil then error("Closing end/done without begining if/while") end
+  local function fixAddress(o, adr)
+    if adr == nil then error("Closing end without begining") end
     o = o - adr
     code.replace(o, adr)
   end  
@@ -263,7 +275,7 @@ local function Interpreter(debug)
   
   -- Parse input string
   local function parse(input)
-    if input == nil or input == "" then return nil, nil end
+    if input == nil or input == "" or string.gsub(input, "%s" , "") == "" then return nil, nil end
     local ast = grammar:match(input)
     if bCommentEnded then bCommentEnded = false; bCommentStarted = false; return nil, nil end
     if bCommentStarted then return nil, nil end
@@ -322,10 +334,20 @@ local function Interpreter(debug)
   end    
   
   -- Declare global variable or function, returns index in list
-  local function init(id, t, size, p, rettype)
+  local function init(id, t, size, p, rettype, forward)
     local s = vars[id]
-    if s then 
-      error("id with name " .. id " already defined")
+    if s and not s.forward then 
+      error("id with name " .. id .." already defined")
+    elseif s and s.forward then
+      --full declaration
+      if p then
+        params.clear()
+        for _,v in ipairs(p) do
+          params.add(v)
+        end        
+      end
+      s.forward = nil
+      return s.val, params.getAll()
     end
     if ut.isArrayType(t) and not size then
       error("Array size must be specified in declaration")
@@ -334,7 +356,7 @@ local function Interpreter(debug)
       checkType("number", size.type, "Array size must be a number\n")
     end  
     num = nvars + 1
-    vars[id] = {val = num, ["type"] = t}
+    vars[id] = {val = num, ["type"] = t, forward = forward}
     if rettype then vars[id].rettype = rettype end
     nvars = num
     declared.add(id)
@@ -344,7 +366,7 @@ local function Interpreter(debug)
         params.add(v)
       end
     end
-    return num
+    return num, params.getAll()
   end    
     
   -- Store global variable, returns index in list
@@ -372,11 +394,14 @@ local function Interpreter(debug)
       addCode("loadat")
       addCode(getVar(ast.id.val).val)
     elseif ast.tag == "call" then
-      for i = 1, #ast.params do
+      --push parameters on stack in reverse order 
+      for i = #ast.params,1, -1  do
         codeExp(ast.params[i])
        end
        addCode("call")
-       addCode(getVar(ast.id.val).val) 
+       local record = getVar(ast.id.val)
+--     if not record.code then error("Function ".. tostring(ast.id.val) .. " is not initialized") end
+       addCode(record.val) 
     elseif ast.tag == "var" then
       addCode("load")
       addCode(getVar(ast.val).val)
@@ -434,18 +459,29 @@ local function Interpreter(debug)
   -- Codify Statement
   local function codeStatement(ast)
     if ast.tag == "funcdef" then
-      local v = init(ast.id, "func", ast.size, ast.params, ast.type)
-      fdeclared.add(ast.id)
+      local v, p = init(ast.id, "func", ast.size, ast.params, ast.type)
       if ast.size then
         codeExp(ast.size) -- push size number on stack
       end
-      addCode("func")
-      addCode(v)
-      addCode(ast.type) -- type as string for now
-    elseif ast.tag == "return" then
-      local declaredf = vars[fdeclared.removeLast()]
-      if not declaredf then error("Return statement without function declaration") end 
-      checkType(declaredf.rettype, ast.val.type)
+      addCode("funcdef")
+      if fdeclared.lastPosition() > 0 then error("Another function is declaring, not allowed nested declaration") end
+      fdeclared.add({ast.id, jmpAddress = jmpAddress, cAddress = cAddress}) -- keep cycles and if jumps from main code
+      jmpAddress = ut.List(); cAddress = ut.List()
+      jmpAddress.add(code.lastPosition())
+      addCode(v) -- number of function in memory
+      addCode(#p) -- number of parameters
+    elseif ast.tag == "funcfdef" then
+      local v, p = init(ast.id, "func", ast.size, {}, ast.type, true)
+      if ast.size then
+        codeExp(ast.size) -- push size number on stack
+      end
+      addCode("funcfdef")
+      addCode(v) -- number of function in memory
+    elseif ast.tag == "return" then 
+      local df = fdeclared.getLast()
+      df = df and vars[df[1]] 
+      if not df then error("Return statement without function declaration") end 
+      checkType(df.rettype, ast.val.type)
       codeExp(ast.val)
       addCode("ret")
     elseif ast.tag == "declaration" then
@@ -488,7 +524,7 @@ local function Interpreter(debug)
       addCode(0) -- jump address to fix 
       jmpAddress.add(code.lastPosition())
     elseif ast.tag == "elseif" then
-      fixAddress(code.lastPosition()) -- jump just before condition execution
+      fixAddress(code.lastPosition(), jmpAddress.removeLast()) -- jump just before condition execution
       codeExp(ast.cond)
       addCode("jmpz")
       addCode(0) -- jump address to fix 
@@ -497,16 +533,28 @@ local function Interpreter(debug)
       addCode("jmp")
       addCode(0)
       local adr = code.lastPosition()
-      fixAddress(adr)
+      fixAddress(adr, jmpAddress.removeLast())
       jmpAddress.add(adr)
     elseif ast.tag == "end" then
       addCode("noop")
-      fixAddress(code.lastPosition()) 
+      local adr = jmpAddress.removeLast()
+      if fdeclared.getLast() ~= nil and jmpAddress.lastPosition() == 0 then
+        -- end of function declaration
+        addCode("endf")
+        local g = fdeclared.removeLast()
+        --restore addresses from global scope
+        jmpAddress = g.jmpAddress 
+        cAddress = g.cAddress
+        local funccode = code.getSection(adr, code.lastPosition())
+        vars[g[1]].code = funccode
+      else 
+        fixAddress(code.lastPosition(), adr)
+      end  
     elseif ast.tag == "done" then
      addCode("jmp")
      addCode(getCycleCondAddr() - (code.lastPosition() + 1))
      addCode("noop")
-     fixAddress(code.lastPosition()) 
+     fixAddress(code.lastPosition(), jmpAddress.removeLast()) 
     else codeExp(ast)
     end    
   end
@@ -517,6 +565,7 @@ local function Interpreter(debug)
     if not buffer.isEmpty() then code.add(buffer); buffer.clear() end
     local status, ast, err = pcall(parse, line)
     if (err ~= nil) then ut.syntaxErrorHandler(err); return {}, err end
+    if type(ast) == "number" then ut.syntaxErrorHandler({line = line, position = ast}); return {}, nil end
     if ast ~= nil then
           d.debug(print, "AST")
           d.debug(ut.printtable, ast)
@@ -555,12 +604,15 @@ local function Interpreter(debug)
     while line do 
       local status, ast, err = pcall(parse, line)
       if (err ~= nil) then ut.syntaxErrorHandler(err); return {}, err end
-      if ast ~= nil then
+      if type(ast) == "number" then
+        ut.syntaxErrorHandler({line = line, position = ast})
+        os.exit(1)
+      elseif ast ~= nil then
           d.debug(print, "AST line: ".. l)
           d.debug(ut.printtable, ast)
           status, err = pcall(codeStatement, ast)
-          d.debug(print, "Params")
-          d.debug(ut.printtable, params.getAll())
+          d.debug(print, "Internal variables")
+          d.debug(ut.printtable, vars)
           if not status then
             ut.errorHandler("Compilation error in line ".. l .. ": " .. line .. "\n" .. err)
             -- rollback declaration

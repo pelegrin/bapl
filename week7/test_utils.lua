@@ -54,6 +54,39 @@ function test_list()
   lu.assertEquals(l.isEmpty(), false, "list is not empty")
   l.clear()
   lu.assertEquals(l.isEmpty(), true, "list is empty")
+  l.add(1)
+  l.add(2)
+  lu.assertEquals(l.getLast(), 2, "last element is 2")
+  l.add(3)
+  l.add(4)
+  l.add(5)
+  lu.assertEquals(l.getSection(2, 4), {2,3,4}, "section from 2 to 4 included")
+  lu.assertEquals(l.cutSection(2, 4), {2,3,4}, "section from 2 to 4 included cut")
+  lu.assertEquals(l.lastPosition(), 2, "after cut 2 elements remains")
+  lu.assertEquals(l.getAll(), {1, 5}, "remains")
+end
+
+function test_section_cut()
+  local l = ut.List()
+  l.add(5)
+  l.add(6)
+  l.add(4)
+  l.add(3)
+  l.add(2)
+  l.add(1)
+  lu.assertEquals(l.cutSection(2,4), {6, 4, 3}, "section after cutting")
+  lu.assertEquals(l.lastPosition(), 3, "after cut 3 elements remains")
+  lu.assertEquals(l.getAll(), {5, 2, 1}, "remains")
+end
+
+function test_copy_table()
+  local subtable = {1, 2, 3}
+  local t1 = { 1, 2, subtable}
+  local t2 = {}
+  ut.copyTable(t1, t2)
+  lu.assertEquals(t2, { 1, 2, {1, 2, 3}}, "table copied")
+  subtable[3] = nil
+  lu.assertEquals(t2, { 1, 2, {1, 2, 3}}, "table deeply copied")
 end
 
 os.exit( lu.LuaUnit.run() )
