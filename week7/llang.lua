@@ -325,7 +325,7 @@ local function Interpreter(debug)
   local function init(id, t, size, p, rettype)
     local s = vars[id]
     if s then 
-      error("id with name " .. id " already defined")
+      error("id with name " .. id .." already defined")
     end
     if ut.isArrayType(t) and not size then
       error("Array size must be specified in declaration")
