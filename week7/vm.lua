@@ -90,7 +90,7 @@ local function VM(stack, mem, debug)
          pc = pc + 1
          local v = (mem[code[pc]] or {}).val
          if v == nil then
-           local t = mem[code[pc]]["type"]
+           local t = (mem[code[pc]] or {})["type"]
            if t ~= "func" then error("Variable is not initialized") end
            stack.push(code[pc]) -- function reference on stack
          else
