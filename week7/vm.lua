@@ -81,7 +81,8 @@ local function VM(stack, mem, debug)
         stack.push(vm.run(funccode)) -- push return value on stack
         --closure implementation
         --copy memory back, only if return value of type func        
-        if mem[adr].rettype == "func" then ut.copyTable(m, mem) end
+        --if mem[adr].rettype == "func" then ut.copyTable(m, mem) end
+        ut.copyTable(m, mem) -- need to copy back to apply changes in upper scope
       elseif code[pc] == "ret" then return stack.pop() -- return top of the stack
       elseif code[pc] == "push" then
         pc = pc + 1
