@@ -35,7 +35,8 @@ local function Interpreter(debug)
   local function rollback_declared()
     local i = 0
     for _,v in ipairs(declared.getAll()) do
-      vars[v] = nil
+      (vars[v.scope])[v.id] = nil
+      i = i + 1
     end
     nvars = nvars - i
     declared.clear()
@@ -46,6 +47,53 @@ local function Interpreter(debug)
   local isDebug = debug or false
   local d = ut.Debug(isDebug)
   
+  -- Type system functions
+  local function checkType(t1, t2, m)
+    if t2 ~= nil and t1 ~= nil and string.gsub(t1, " ","") ~= string.gsub(t2, " ", "")  then
+      error(m or "" .. "Type checking error. Expected " .. string.gsub(t1, " ", "") .. " but get " .. string.gsub(t2, " ",""))
+    end
+  end
+  
+  -- Check parameter in func definition TODO: type checking
+  local function checkParams(id, t)
+    for i,v in ipairs(params.getAll()) do
+      if v.id == id then 
+        checkType(t, v.type) 
+        return {val = -i }
+      end
+    end
+    return nil
+  end
+
+  -- Reserved words
+  local reserved = {"return", "while", "for", "done", "elseif", "if", "else" , "end", "and", "or", "true", "false", "number", "bool", "func"}
+  
+    -- Checks if id belongs to reserved words
+  local function Rw(id)
+    for _, r in ipairs(reserved) do
+      if id == r then return true end    
+    end  
+    return false
+  end  
+
+      -- Get global variable structure
+  local function getVar(id, t)
+    if Rw(id) then error("Variable "..tostring(id) .. " is a reserved word") end
+    local s = checkParams(id, t)
+    if s then return s end
+    
+    --get all scopes where variable is visible
+    local scopes = scope.getAll()
+    -- search from last to first
+    local v
+    for i = #scopes, 1, -1 do
+      v = (vars[scopes[i]] or {})[id]
+      if v then break end
+    end
+    if not v then error("Undefined variable " ..tostring(id)) end
+    return v
+  end
+
   -- Parser part
   
   --[[
@@ -67,7 +115,7 @@ local function Interpreter(debug)
         t[v] = params[i]
         if tag == "var" and v == "val" then
           -- in variable case, get type from vars
-          t["type"] = (vars[params[i]] or {})["type"]
+          t["type"] = ( (vars[scope.getLast()] or {})[params[i]] or {})["type"]
         end
         if tag == "getidx" and v == "id" then 
           -- in case of array get type from id table
@@ -156,9 +204,6 @@ local function Interpreter(debug)
   local h = lpeg.S("aAbBcCdDeEfF") 
   local x = lpeg.S("xX")
   local sym = lpeg.R("az", "AZ")
-
-  -- Reserved words
-  local reserved = {"return", "while", "for", "done", "elseif", "if", "else" , "end", "and", "or", "true", "false", "number", "bool", "func"}
   
   local alpha = lpeg.R("AZ", "az")
   local digit = lpeg.R("09")
@@ -289,43 +334,7 @@ local function Interpreter(debug)
   local function addCode(op)
     code.add(op)
   end
-  
-  -- Checks if id belongs to reserved words
-  local function Rw(id)
-    for _, r in ipairs(reserved) do
-      if id == r then return true end    
-    end  
-    return false
-  end  
-  
-  local function checkType(t1, t2, m)
-    if t2 ~= nil and t1 ~= nil and string.gsub(t1, " ","") ~= string.gsub(t2, " ", "")  then
-      error(m or "" .. "Type checking error. Expected " .. string.gsub(t1, " ", "") .. " but get " .. string.gsub(t2, " ",""))
-    end
-  end
-  
-  -- Check parameter in func definition TODO: type checking
-  local function checkParams(id, t)
-    for i,v in ipairs(params.getAll()) do
-      if v.id == id then 
-        checkType(t, v.type) 
-        return {val = -i }
-      end
-    end
-    return nil
-  end
-  
-    -- Get global variable structure
-  local function getVar(id, t)
-    if Rw(id) then error("Variable "..tostring(id) .. " is a reserved word") end
-    local s = checkParams(id, t)
-    if s then return s end
-
-    local v = vars[id]
-    if not v then error("Undefined variable " ..tostring(id)) end
-    return v
-  end
-  
+        
   -- TODO: merge with checkType
   local function checkAssignType(id, t2)    
     if t2 == nil or id == nil then return end
@@ -337,8 +346,9 @@ local function Interpreter(debug)
   
   -- Declare global variable or function, returns index in list
   local function init(id, t, size, p, rettype, forward)
-    local s = vars[id]
-    if s and not s.forward and s.scope == scope.getLast() then 
+    local cscope = scope.getLast()
+    local s = (vars[cscope] or {})[id]
+    if s and not s.forward then 
       error("id with name " .. id .." already defined")
     elseif s and s.forward then
       --full declaration
@@ -358,10 +368,11 @@ local function Interpreter(debug)
       checkType("number", size.type, "Array size must be a number\n")
     end  
     num = nvars + 1
-    vars[id] = {val = num, ["type"] = t, forward = forward, scope = scope.getLast()}
-    if rettype then vars[id].rettype = rettype end
+    if not vars[cscope] then vars[cscope] = {} end -- create scope if not exist
+    vars[cscope][id] = {val = num, ["type"] = t, forward = forward, scope = cscope}
+    if rettype then vars[cscope][id].rettype = rettype end
     nvars = num
-    declared.add(id)
+    declared.add({id = id, scope = cscope})
     if p then
       params.clear()
       for _,v in ipairs(p) do
@@ -373,7 +384,7 @@ local function Interpreter(debug)
     
   -- Store global variable, returns index in list
   local function store(id)
-    local s = vars[id]
+    local s = getVar(id)
     if not s then error("Variable "..tostring(id) .. " is not declared") end
     return s.val
   end
@@ -466,13 +477,13 @@ local function Interpreter(debug)
   local function codeStatement(ast)
     if ast.tag == "funcdef" then
       local v, p = init(ast.id, "func", ast.size, ast.params, ast.type)
+      fdeclared.add({ast.id, jmpAddress = jmpAddress, cAddress = cAddress, scope = scope.getLast()}) -- keep cycles and if jumps from main code
       scope.add(ast.id)
       if ast.size then
         codeExp(ast.size) -- push size number on stack
       end
       addCode("funcdef")
       --if fdeclared.lastPosition() > 0 then error("Another function is declaring, not allowed nested declaration") end
-      fdeclared.add({ast.id, jmpAddress = jmpAddress, cAddress = cAddress}) -- keep cycles and if jumps from main code
       jmpAddress = ut.List(); cAddress = ut.List()
       jmpAddress.add(code.lastPosition())
       addCode(v) -- number of function in memory
@@ -488,7 +499,8 @@ local function Interpreter(debug)
       addCode(ast.type) -- return type for functions
     elseif ast.tag == "return" then 
       local df = fdeclared.getLast()
-      df = df and vars[df[1]] 
+      local v = vars[df.scope]
+      df = df and v[df[1]] -- get function id from scope
       if not df then error("Return statement without function declaration") end 
       checkType(df.rettype, ast.val.type)
       codeExp(ast.val)
@@ -551,11 +563,11 @@ local function Interpreter(debug)
         -- end of function declaration
         addCode("endf")
         local g = fdeclared.removeLast()
-        --restore addresses from global scope
+        --restore addresses from previous scope
         jmpAddress = g.jmpAddress 
         cAddress = g.cAddress
         local funccode = code.getSection(adr, code.lastPosition())
-        vars[g[1]].code = funccode
+        vars[g.scope][g[1]].code = funccode
         scope.removeLast()
       else 
         fixAddress(code.lastPosition(), adr)
