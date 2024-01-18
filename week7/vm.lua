@@ -30,25 +30,38 @@ local function VM(stack, mem, debug)
     if not s or s <= 0 then error(m) end          
     return s
   end
+  
+  local function buildfunc(code, counter)
+        counter = counter + 1
+        local n = counter
+        counter = counter + 1
+        local m = counter
+        counter = counter + 1
+        mem[code[n]] = {["type"] = "func", params = code[m], forward = nil, rettype = code[counter]}
+        counter = counter + 1
+        local funccode = ut.List()
+        while code[counter] ~= "endf" do
+          if code[counter] == "funcdef" then
+            counter = buildfunc(code, counter)
+          else
+            funccode.add(code[counter])
+          end
+          counter = counter + 1            
+        end
+        mem[code[n]].code = funccode.getAll()
+        return counter
+  end
 
   local function run(code)
     local pc = 1
     while pc <= #code do
-      if code[pc] == "funcdef" then
+      if code[pc] == "funcdef" then        
+        pc = buildfunc(code, pc)        
+      elseif code[pc] == "funcfdef" then
         pc = pc + 1
         local n = pc
         pc = pc + 1
-        mem[code[n]] = {["type"] = "func", params = code[pc], forward = nil}
-        pc = pc + 1
-        local funccode = ut.List()
-        while code[pc] ~= "endf" do
-          funccode.add(code[pc])
-          pc = pc + 1
-        end
-        mem[code[n]].code = funccode.getAll()
-      elseif code[pc] == "funcfdef" then
-        pc = pc + 1
-        mem[code[pc]] = {["type"] = "func", forward = true}
+        mem[code[n]] = {["type"] = "func", forward = true, rettype = code[pc]}
       elseif code[pc] == "call" then
         pc = pc + 1
         local adr = code[pc]
@@ -66,13 +79,16 @@ local function VM(stack, mem, debug)
         end
         local vm = VM(stack, m, debug)
         stack.push(vm.run(funccode)) -- push return value on stack
+        --closure implementation
+        --copy memory back, only if return value of type func        
+        if mem[adr].rettype == "func" then ut.copyTable(m, mem) end
       elseif code[pc] == "ret" then return stack.pop() -- return top of the stack
       elseif code[pc] == "push" then
         pc = pc + 1
         stack.push(code[pc])
       elseif code[pc] == "load" then
          pc = pc + 1
-         local v = mem[code[pc]].val
+         local v = (mem[code[pc]] or {}).val
          if v == nil then
            local t = mem[code[pc]]["type"]
            if t ~= "func" then error("Variable is not initialized") end
@@ -117,6 +133,7 @@ local function VM(stack, mem, debug)
            local ref = stack.pop()
            v.code = mem[ref].code -- copy code to referenced function
            v.params = mem[ref].params
+           v.rettype = mem[ref].rettype
          else  
           v.val = stack.pop()
          end 

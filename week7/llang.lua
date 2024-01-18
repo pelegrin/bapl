@@ -24,6 +24,8 @@ local function Interpreter(debug)
   local jmpAddress = ut.List() -- list of addresses marks the address to jmp from cycle or if statement
   local cAddress = ut.List() -- list of addresses marks the condition of cycle, to this address should jump at end of cycle
   local buffer = ut.List() -- code buffer for interactive mode and processing control structures
+  local scope = ut.List()
+  scope.add("main")
   --[[
   -- special structure that keeps declaration for one processing line for rollback
     using in case of compilation error in sequence.    
@@ -336,7 +338,7 @@ local function Interpreter(debug)
   -- Declare global variable or function, returns index in list
   local function init(id, t, size, p, rettype, forward)
     local s = vars[id]
-    if s and not s.forward then 
+    if s and not s.forward and s.scope == scope.getLast() then 
       error("id with name " .. id .." already defined")
     elseif s and s.forward then
       --full declaration
@@ -356,7 +358,7 @@ local function Interpreter(debug)
       checkType("number", size.type, "Array size must be a number\n")
     end  
     num = nvars + 1
-    vars[id] = {val = num, ["type"] = t, forward = forward}
+    vars[id] = {val = num, ["type"] = t, forward = forward, scope = scope.getLast()}
     if rettype then vars[id].rettype = rettype end
     nvars = num
     declared.add(id)
@@ -390,9 +392,13 @@ local function Interpreter(debug)
       addCode(ast.val == "true" and TRUE or FALSE)
     elseif ast.tag == "getidx" then
       checkType("number", ast.indx.type, "Array index must be a number\n")
+      local v = getVar(ast.id.val)
+      local t = v.type or ""
+      t = string.gsub(t, "%a+", "")
+      checkType(t, "[]", "Type should be array to use indecies\n")
       codeExp(ast.indx, ast.indx.type)
       addCode("loadat")
-      addCode(getVar(ast.id.val).val)
+      addCode(v.val)
     elseif ast.tag == "call" then
       --push parameters on stack in reverse order 
       for i = #ast.params,1, -1  do
@@ -400,7 +406,7 @@ local function Interpreter(debug)
        end
        addCode("call")
        local record = getVar(ast.id.val)
---     if not record.code then error("Function ".. tostring(ast.id.val) .. " is not initialized") end
+   --  if not record.code then error("Function ".. tostring(ast.id.val) .. " is not initialized") end
        addCode(record.val) 
     elseif ast.tag == "var" then
       addCode("load")
@@ -460,16 +466,18 @@ local function Interpreter(debug)
   local function codeStatement(ast)
     if ast.tag == "funcdef" then
       local v, p = init(ast.id, "func", ast.size, ast.params, ast.type)
+      scope.add(ast.id)
       if ast.size then
         codeExp(ast.size) -- push size number on stack
       end
       addCode("funcdef")
-      if fdeclared.lastPosition() > 0 then error("Another function is declaring, not allowed nested declaration") end
+      --if fdeclared.lastPosition() > 0 then error("Another function is declaring, not allowed nested declaration") end
       fdeclared.add({ast.id, jmpAddress = jmpAddress, cAddress = cAddress}) -- keep cycles and if jumps from main code
       jmpAddress = ut.List(); cAddress = ut.List()
       jmpAddress.add(code.lastPosition())
       addCode(v) -- number of function in memory
       addCode(#p) -- number of parameters
+      addCode(ast.type) -- return type for functions
     elseif ast.tag == "funcfdef" then
       local v, p = init(ast.id, "func", ast.size, {}, ast.type, true)
       if ast.size then
@@ -477,6 +485,7 @@ local function Interpreter(debug)
       end
       addCode("funcfdef")
       addCode(v) -- number of function in memory
+      addCode(ast.type) -- return type for functions
     elseif ast.tag == "return" then 
       local df = fdeclared.getLast()
       df = df and vars[df[1]] 
@@ -547,6 +556,7 @@ local function Interpreter(debug)
         cAddress = g.cAddress
         local funccode = code.getSection(adr, code.lastPosition())
         vars[g[1]].code = funccode
+        scope.removeLast()
       else 
         fixAddress(code.lastPosition(), adr)
       end  
