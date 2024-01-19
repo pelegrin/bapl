@@ -96,7 +96,7 @@ function test_update_table()
   ut.updateTable(t1, t2)
   lu.assertEquals(t2, {1, b = 4, d = {1, 2}}, "table updated")
   subtable[1] = nil
-  lu.assertEquals(t1, {1, 2, a = 3, b = 4, c = 5, d = { [2]=2, [3]=3 }}, "original table changed")
+  lu.assertEquals(t1, {1, 2, a = 3, b = 4, c = 5, d = subtable}, "original table changed")
   lu.assertEquals(t2, {1, b = 4, d = {1, 2}}, "table deeply updated, no changes")
 end
 
