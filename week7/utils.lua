@@ -211,6 +211,19 @@ local function copyTable(source, dest)
      end
   end
 end  
+
+-- only copy existing keys in destination from source, effectevly updating values in dest table
+local function updateTable(source, dest)
+  for i,v in pairs(source) do
+    if dest[i] then 
+      if type(v) == "table" then
+        updateTable(v, dest[i])
+      else
+        dest[i] = v
+      end 
+    end
+  end
+end
   
 
 Utils.printtable = printtable
@@ -224,6 +237,7 @@ Utils.fileExists = fileExists
 Utils.readall = readall
 Utils.isArrayType = isArrayType
 Utils.copyTable = copyTable
+Utils.updateTable = updateTable
 
 return Utils
 

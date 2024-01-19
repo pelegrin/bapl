@@ -89,4 +89,15 @@ function test_copy_table()
   lu.assertEquals(t2, { 1, 2, {1, 2, 3}}, "table deeply copied")
 end
 
+function test_update_table()
+  local subtable = { 1, 2, 3 }
+  local t1 = { 1, 2, a = 3, b = 4, c = 5, d = subtable}
+  local t2 = { 4, b = 3, d = {4, 6} }
+  ut.updateTable(t1, t2)
+  lu.assertEquals(t2, {1, b = 4, d = {1, 2}}, "table updated")
+  subtable[1] = nil
+  lu.assertEquals(t1, {1, 2, a = 3, b = 4, c = 5, d = { [2]=2, [3]=3 }}, "original table changed")
+  lu.assertEquals(t2, {1, b = 4, d = {1, 2}}, "table deeply updated, no changes")
+end
+
 os.exit( lu.LuaUnit.run() )
