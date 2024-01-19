@@ -37,8 +37,33 @@ local function syntaxErrorHandler(err)
   print("LZ1 Syntax error in line: " .. errMsg)
 end
 
-function Stack()
-  local self = {_ptr = 0}
+-- deep copy implementation
+local function copyTable(source, dest)
+  for i,v in pairs(source) do
+    if type(v) == "table" then      
+      dest[i] = {}
+      copyTable(v, dest[i])
+     else       
+       dest[i] = v
+     end
+  end
+end  
+
+-- only copy existing keys in destination from source, effectevly updating values in dest table
+local function updateTable(source, dest)
+  for i,v in pairs(source) do
+    if dest[i] then 
+      if type(v) == "table" then
+        updateTable(v, dest[i])
+      else
+        dest[i] = v
+      end 
+    end
+  end
+end
+
+function Stack(l)
+  local self = l or {_ptr = 0}
 
   local function isempty()
       return self._ptr == 0
@@ -62,10 +87,17 @@ function Stack()
     printtable(self)
   end
   
+  local function copy()
+    local r = {}
+    copyTable(self, r)
+    return Stack(r)
+  end
+
   return {
     isempty = isempty,    
     push = push,
     pop = pop,
+    copy = copy,
     printStack = printStack
   }
 end
@@ -155,7 +187,7 @@ function List()
   local function clear()
     l = {}
   end
-  
+    
   return setmetatable ({
     get = get,
     add = add,
@@ -198,31 +230,6 @@ end
 
 local function isArrayType(t)
   return string.find(t, "%[")
-end
-
--- deep copy implementation
-local function copyTable(source, dest)
-  for i,v in pairs(source) do
-    if type(v) == "table" then      
-      dest[i] = {}
-      copyTable(v, dest[i])
-     else       
-       dest[i] = v
-     end
-  end
-end  
-
--- only copy existing keys in destination from source, effectevly updating values in dest table
-local function updateTable(source, dest)
-  for i,v in pairs(source) do
-    if dest[i] then 
-      if type(v) == "table" then
-        updateTable(v, dest[i])
-      else
-        dest[i] = v
-      end 
-    end
-  end
 end
   
 
