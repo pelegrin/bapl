@@ -2,7 +2,7 @@
 
 EXIT_CODE=0
 for sut in $(find . -iregex ".*\.lz"); do
-    echo "Running source files in ${sut}"
+    echo "Running source file: ${sut}"
     sut_dir=$(dirname ${sut})
     sut_file=$(basename ${sut})
     LUA_PATH="${sut_dir}/?.lua;;" ${sut_dir}/lazarus ${sut}
