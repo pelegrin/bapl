@@ -76,8 +76,8 @@ local function VM(stack, mem, debug)
         while i > 0 do
           m[-i] = {val = stack.pop()}
           i = i - 1
-        end
-        local vm = VM(stack, m, debug)
+        end        
+        local vm = VM(stack.copy(), m, debug)
         stack.push(vm.run(funccode)) -- push return value on stack
         --closure implementation
         --copy memory back, only if return value of type func        

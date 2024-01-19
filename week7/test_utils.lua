@@ -29,6 +29,13 @@ function test_stack()
   lu.assertEquals(actual, o, "poped objecet from Stack is expected")
   lu.assertEquals(s.isempty(), true, "after pop Stack is empty")
   lu.assertEquals(s.pop(), nil, "empty Stack returns nil")
+  s.push(1)
+  s.push(5)
+  local s2 = s.copy()
+  lu.assertEquals(s.pop(), 5, "source popped")
+  lu.assertEquals(s2.pop(), 5, "dest popped")
+  lu.assertEquals(s.pop(), 1, "source popped")
+  lu.assertEquals(s2.pop(), 1, "dest popped")
 end
 
 function test_list()
