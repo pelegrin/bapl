@@ -251,7 +251,7 @@ local function Interpreter(debug)
   local variable = (sym^1 + T"_" * T"_"^-1 * sym^1) * loc.alnum^0 / node("var", "val") * space
   local ref = lpeg.S("$") * (sym^1 * loc.alnum^0 / node("ref", "val") ) * space
   local id = variable + ref
-  local pr = lpeg.P("@")
+  local sys = lpeg.C(lpeg.P"@" + "->")
   local unary = lpeg.V("unary")
   local primary = lpeg.V("primary")
   local ternary = lpeg.V("ternary")
@@ -292,7 +292,7 @@ local function Interpreter(debug)
               + Res"done"/node("done")
               + declaration / node("declaration", "type", "id", "size")
               + assignment
-              + pr * expression / node({tag = "sys", code = 1}, "exp")
+              + sys * expression / node("sys", "opcode", "exp")
               + ternary
               + expression,
     primary = numerals 
@@ -324,7 +324,9 @@ local function Interpreter(debug)
                ["&"] = "and", ["|"] = "or"
              }    
   local unops = {["--"] = "dec", ["++"] = "inc", ["-"] = "minus", ["!"] = "not", ["#"] = "size",
-            }              
+          }              
+   
+   local systemfunc = {["@"] = 1, ["->"] = 2}
   
   -- fix element in list at position stored in the end of jmpAddress with dif with address o
   local function fixAddress(o, adr)
@@ -479,6 +481,9 @@ local function Interpreter(debug)
       fixAddr = code.lastPosition() - adr     
       code.replace(fixAddr, adr2)  
     elseif ast.tag == "binop" then
+      isAllowTypeForOp(ast.op, ast.e1.type)
+      isAllowTypeForOp(ast.op, ast.e2.type)
+      isAllowTypeForOp(ast.op, t)
       checkType(ast.e1.type, ast.e2.type)
       checkType(ast.e1.type, t)
       checkType(ast.e2.type, t)
@@ -553,7 +558,7 @@ local function Interpreter(debug)
     elseif ast.tag == "sys" then
       codeExp(ast.exp)
       addCode("syscall")
-      addCode(ast.code)
+      addCode(systemfunc[ast.opcode])
     elseif ast.tag == "while" then
       cAddress.add(code.lastPosition()) -- Jump at the start of condition
       codeExp(ast.cond)

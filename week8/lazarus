@@ -84,11 +84,12 @@ local function execute(l, line)
   local codeList, err = ip.interpret(line)
   if err then return end    
   -- trick with temporary buffer for compile complete control statement
-  if codeList == nil and err == nil then return end
+  if codeList == nil and err == nil then return nil end
   d.debug(print, "Code List")
   d.debug(ut.printtable, codeList)    
   status, err =  pcall(vm.run, codeList)
   status = status or ut.errorHandler("VM error in line: ".. l .. "\n" .. line, err)
+  return status
 end  
 
 local commands = {
@@ -139,10 +140,11 @@ end
 
 --interactive mode
 local line = io.stdout:write(string.format("lazarus line:%d > ", l)) and io.read()
-while line do    
-    if not executeCommand(line) then      
-      execute(l, line)
+while line do
+    local r = executeCommand(line)
+    if not r then      
+      r = execute(l, line)
       l = l + 1
     end
-    line = io.stdout:write(string.format("lazarus line:%d > ", l)) and io.read()
+    line = io.stdout:write(r and string.format("lazarus line:%d > ", l) or string.format("lazarus line:%d continue..> ", l)) and io.read()
 end
