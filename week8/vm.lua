@@ -25,7 +25,22 @@ local function VM(stack, mem, debug)
     end
   end 
   
-  local syscalls = { ["1"] = sysprint }
+  local function sysinput(ref)
+    ut.printtable(ref)
+    io.write("lazurus input > ")
+    local val = tonumber(io.read("l"))
+    if not val then
+      error("Only support input numbers") 
+      return
+    end
+    if mem[ref]["type"] ~= "number" then 
+      error("Only support number references") 
+      return
+    end
+    mem[ref].val = val
+  end
+  
+  local syscalls = { ["1"] = sysprint, ["2"] = sysinput }
   -- internal data structures
   local isDebug = debug or false
   local d = ut.Debug(isDebug)
@@ -102,6 +117,9 @@ local function VM(stack, mem, debug)
         end
       elseif code[pc] == "ret" then return stack.pop() -- return top of the stack
       elseif code[pc] == "push" then
+        pc = pc + 1
+        stack.push(code[pc])
+      elseif code[pc] == "loadref" then
         pc = pc + 1
         stack.push(code[pc])
       elseif code[pc] == "load" then
@@ -260,7 +278,7 @@ local function VM(stack, mem, debug)
       elseif code[pc] == "noop" then
         -- do nothing
       else
-        error("LAZ0 unkown op code:" .. code[pc])
+        error("LAZ0 unkown op code:" .. tostring(code[pc]))
       end    
       pc = pc + 1
     end
