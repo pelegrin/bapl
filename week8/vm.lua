@@ -33,6 +33,10 @@ local function VM(stack, mem, debug)
       error("Only support input numbers") 
       return
     end
+    if mem[ref]["type"] ~= "number" then 
+      error("Only support number references") 
+      return
+    end
     mem[ref].val = val
   end
   
@@ -115,7 +119,7 @@ local function VM(stack, mem, debug)
       elseif code[pc] == "push" then
         pc = pc + 1
         stack.push(code[pc])
-      elseif code[pc] == "loadg" then
+      elseif code[pc] == "loadref" then
         pc = pc + 1
         stack.push(code[pc])
       elseif code[pc] == "load" then

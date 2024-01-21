@@ -444,7 +444,7 @@ local function Interpreter(debug)
       addCode("load")
       addCode(getVar(ast.val).val)
     elseif ast.tag == "ref" then
-      addCode("loadg")
+      addCode("loadref")
       addCode(getVar(ast.val).val)
     elseif ast.tag == "binop" and ops[ast.op] == "and" then
       codeExp(ast.e1, t)
