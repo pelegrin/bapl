@@ -1,0 +1,14 @@
+func func outer()
+  number a, a = 1
+  number func inner()
+    number b, b = 3 // this should not be visible in VM memory after execution
+    @a
+    return a
+  end
+  return inner
+end
+
+func f, f = outer()
+number a, a = 2
+f()
+@a //print 1 from closure and 2 from main scope

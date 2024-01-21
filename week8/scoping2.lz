@@ -1,0 +1,19 @@
+number x
+x = 1
+
+number func one()
+  x = 2
+  @x
+  return x
+end
+number func two()
+  number x
+  x = 3
+  @x
+  return x
+end
+
+@x
+one()
+@x
+two() //prints 1, 2, 2, 3 variables redifined in scope, copy changed in scope back to upper scope

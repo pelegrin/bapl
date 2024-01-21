@@ -1,0 +1,4 @@
+number a, a = 0
+number b, b = 1
+number c, c = a + b
+@c //1
