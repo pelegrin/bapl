@@ -3,23 +3,24 @@ local ut = require "utils"
 -- Lazarus VM
 local function VM(stack, mem, debug)  
   --add system functions, ideally should be implemented in Lazarus
-    mem["substring"] = { func = function (s)
-                                  local str = s.pop()
-                                  local n = s.pop()
-                                  if type(str) ~= "string" or type(n) ~= "number" then
-                                    error("Error executing system function substring. Wrong parameters")
-                                    os.exit(1)
-                                  end
-                                  n = math.floor(n)
-                                  if n > 0 then 
-                                    return string.sub(str, 1, n)
-                                  elseif n < 0 then
-                                    return string.sub(str, n)
-                                  else 
-                                    return s
-                                  end
-                                end,
-                      params = 2
+    mem["substring"] = { func = 
+    function (s)
+      local str = s.pop()
+      local n = s.pop()
+      if type(str) ~= "string" or type(n) ~= "number" then
+        error("Error executing system function substring. Wrong parameters")
+        os.exit(1)
+      end
+      n = math.floor(n)
+      if n > 0 then 
+        return string.sub(str, 1, n)
+      elseif n < 0 then
+        return string.sub(str, n)
+      else 
+        return s
+      end
+    end,
+      params = 2
     }
     
   local function getAddress(ref)
@@ -31,16 +32,16 @@ local function VM(stack, mem, debug)
   -- Lazarus VM built-in functions  
   local function sysprint(exp)
     if type(exp) == "table" then
-        print("Array")
+        io.write("Array\n")
         ut.printtable(exp)
         return
     end
     local ref = getAddress(exp)
     if ref then 
       local v = mem[ref]
-      print("Reference to " .. v.type)
+      io.write("Reference to " .. v.type .. "\n")
     else        
-        print(tostring(exp))
+      io.write(tostring(exp).."\n")
     end
   end 
   
