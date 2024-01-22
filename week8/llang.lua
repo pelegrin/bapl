@@ -6,7 +6,7 @@ local lang = {}
 
 -- LPeg Debug function
 local function I (msg)
-  return lpeg.P(function () print(msg); return true end)
+  return lpeg.P(function () io.write(msg); return true end)
 end
 
 
@@ -15,6 +15,10 @@ local FALSE = false
   
 local function Interpreter(debug)  
   local vars = {}
+  local system = {
+    ["substring"] = {val = "substring", ["type"] = "func", rettype = "string", scope = "system", params = 2}
+  }
+  vars["$"] = system
   local nvars = 0
   local params = ut.List()
   -- stores function name when declaration happened, empty when no active function declaration
@@ -55,7 +59,7 @@ local function Interpreter(debug)
     ["--"] = {"number"},
     ["++"] = {"number"},
     ["-"] = {"number"},
-    ["+"] = {"number"},
+    ["+"] = {"number", "string"},
     ["!"] = {"bool"}
   }
     
@@ -86,7 +90,9 @@ local function Interpreter(debug)
   end
 
   -- Reserved words
-  local reserved = {"return", "while", "for", "done", "elseif", "if", "else" , "end", "and", "or", "true", "false", "number", "bool", "func"}
+  local reserved = {
+    "return", "while", "for", "done", "elseif", "if", "else" , "end", "and", "or", "true", "false", "number", "bool", "string", "func"
+    }
   
     -- Checks if id belongs to reserved words
   local function Rw(id)
@@ -110,7 +116,11 @@ local function Interpreter(debug)
       v = (vars[scopes[i]] or {})[id]
       if v then break end
     end
-    if not v then error("Undefined variable " ..tostring(id)) end
+    if not v then 
+      --check system scope
+      v = vars["$"][id]
+      if not v then error("Undefined variable " ..tostring(id)) end
+    end
     return v
   end
 
@@ -170,6 +180,7 @@ local function Interpreter(debug)
     return tree
   end
   
+  -- create sequence from declaration and assignment
   local function tostatements(ast)
     local declaration = ast.declaration
     ast.declaration = nil
@@ -252,7 +263,10 @@ local function Interpreter(debug)
   local hexes = "0" * x * lpeg.C((h + loc.digit)^1) / hex / node({tag = "number", ["type"] = "number"}, "val") * space
   local numerals = hexes + scientific + floats + decimals
   
-  local prTypes = lpeg.P"number" + "bool" + "func"
+  -- Strings
+  local literals = lpeg.P("'") * (lpeg.P(1) - lpeg.P("'"))^0 * lpeg.P("'") / node({tag = "literals", ["type"] = "string"}, "val") * space
+  
+  local prTypes = lpeg.P"number" + "bool" + "func" + "string"
   local array = ("[" * prTypes * "]") -- (lpeg.P"[" * "]")^-1 *
   
   local opA = lpeg.C(lpeg.S("+-")) * space -- addition/substraction
@@ -310,7 +324,8 @@ local function Interpreter(debug)
               + sys * expression / node("sys", "opcode", "exp")
               + ternary
               + expression,
-    primary = numerals 
+    primary = numerals
+              + literals
               + bool
               + funcall
               + T"(" * expression * T")"
@@ -389,6 +404,7 @@ local function Interpreter(debug)
     elseif s and s.forward then
       --full declaration
       if p then
+        vars[cscope][id].params = #p
         params.clear()
         for _,v in ipairs(p) do
           params.add(v)
@@ -405,11 +421,12 @@ local function Interpreter(debug)
     end  
     num = nvars + 1
     if not vars[cscope] then vars[cscope] = {} end -- create scope if not exist
-    vars[cscope][id] = {val = num, ["type"] = t, forward = forward, scope = cscope}
+    vars[cscope][id] = {val = num, ["type"] = t, forward = forward, scope = cscope, name = id}    
     if rettype then vars[cscope][id].rettype = rettype end
     nvars = num
     declared.add({id = id, scope = cscope})
     if p then
+      vars[cscope][id].params = #p
       params.clear()
       for _,v in ipairs(p) do
         params.add(v)
@@ -433,6 +450,12 @@ local function Interpreter(debug)
       checkType("number", t)
       addCode("push")
       addCode(ast.val)
+    elseif ast.tag == "literals" then
+      checkType("string", t)
+      addCode("push")
+      local s = string.gsub(ast.val, "^'", "")
+      s = string.gsub(s, "'$", "")
+      addCode(s)
     elseif ast.tag == "bool" then
       checkType("bool", t)
       addCode("push")
@@ -447,12 +470,17 @@ local function Interpreter(debug)
       addCode("loadat")
       addCode(v.val)
     elseif ast.tag == "call" then
+      local record = getVar(ast.id.val)
+      local astp = #ast.params or 0
+      local fp = record.params
+      if fp and fp ~= astp then
+        error("Function ".. tostring(record.name) .. " must have " .. tostring(fp) .. " params but called with " .. tostring(astp))
+      end
       --push parameters on stack in reverse order 
       for i = #ast.params,1, -1  do
         codeExp(ast.params[i])
        end
        addCode("call")
-       local record = getVar(ast.id.val)
    --  if not record.code then error("Function ".. tostring(ast.id.val) .. " is not initialized") end
        addCode(record.val) 
     elseif ast.tag == "var" then

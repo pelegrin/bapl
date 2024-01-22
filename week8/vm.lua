@@ -2,7 +2,26 @@ local ut = require "utils"
 
 -- Lazarus VM
 local function VM(stack, mem, debug)  
-  
+  --add system functions, ideally should be implemented in Lazarus
+    mem["substring"] = { func = function (s)
+                                  local str = s.pop()
+                                  local n = s.pop()
+                                  if type(str) ~= "string" or type(n) ~= "number" then
+                                    error("Error executing system function substring. Wrong parameters")
+                                    os.exit(1)
+                                  end
+                                  n = math.floor(n)
+                                  if n > 0 then 
+                                    return string.sub(str, 1, n)
+                                  elseif n < 0 then
+                                    return string.sub(str, n)
+                                  else 
+                                    return s
+                                  end
+                                end,
+                      params = 2
+    }
+    
   local function getAddress(ref)
     if not string.match(ref, "^%$") then return nil end
     ref = string.gsub(ref, "^%$", "") -- reference in stack
@@ -26,21 +45,25 @@ local function VM(stack, mem, debug)
   end 
   
   local function sysinput(ref)
-    ut.printtable(ref)
     io.write("lazurus input > ")
-    local val = tonumber(io.read("l"))
-    if not val then
-      error("Only support input numbers") 
+    local t = mem[ref]["type"]
+    local val
+    if t == "number" then 
+      val = tonumber(io.read("l"))
+    elseif t == "string" then
+      val = io.read("l")
+    else
+      error("Only support input numbers or strings")  
       return
     end
-    if mem[ref]["type"] ~= "number" then 
-      error("Only support number references") 
-      return
-    end
-    mem[ref].val = val
+    mem[ref].val = val    
   end
   
-  local syscalls = { ["1"] = sysprint, ["2"] = sysinput }
+  local syscalls = { 
+    ["1"] = sysprint,
+    ["2"] = sysinput
+  }
+  
   -- internal data structures
   local isDebug = debug or false
   local d = ut.Debug(isDebug)
@@ -94,26 +117,30 @@ local function VM(stack, mem, debug)
       elseif code[pc] == "call" then
         pc = pc + 1
         local adr = code[pc]
-        local funccode = mem[adr].code
-        local forward = mem[adr].forward
-        if not funccode and not forward then error("Function is not initialized") end
-        local numofparams = mem[adr].params or 0
-        local i = numofparams
-        local m = {}
-        ut.copyTable(mem, m)
-        -- add parameters in memory with minus indecies
-        while i > 0 do
-          m[-i] = {val = stack.pop()}
-          i = i - 1
-        end        
-        local vm = VM(stack.copy(), m, debug)
-        stack.push(vm.run(funccode)) -- push return value on stack
-        --closure implementation
-        --copy memory back, only if return value of type func        
-        if mem[adr].rettype == "func" then
-          ut.copyTable(m, mem)
+        if type(adr) == "string" then
+          stack.push(mem[adr].func(stack.copy()))
         else
-          ut.updateTable(m, mem) -- update upper scope, only existing keys in memory updated, local vars disappears
+          local funccode = mem[adr].code
+          local forward = mem[adr].forward
+          if not funccode and not forward then error("Function is not initialized") end
+          local numofparams = mem[adr].params or 0
+          local i = numofparams        
+          local m = {}
+          ut.copyTable(mem, m)
+          -- add parameters in memory with minus indecies
+          while i > 0 do
+            m[-i] = {val = stack.pop()}
+            i = i - 1
+          end        
+          local vm = VM(stack.copy(), m, debug)
+          stack.push(vm.run(funccode)) -- push return value on stack
+          --closure implementation
+          --copy memory back, only if return value of type func        
+          if mem[adr].rettype == "func" then
+            ut.copyTable(m, mem)
+          else
+            ut.updateTable(m, mem) -- update upper scope, only existing keys in memory updated, local vars disappears
+          end
         end
       elseif code[pc] == "ret" then return stack.pop() -- return top of the stack
       elseif code[pc] == "push" then
@@ -180,7 +207,11 @@ local function VM(stack, mem, debug)
       elseif code[pc] == "add" then
         local op2 = stack.pop()
         local op1 = stack.pop()
-        stack.push(op1 + op2)
+        if type(op1) == "string" then 
+          stack.push(op1 .. op2)
+        else
+          stack.push(op1 + op2)
+        end
       elseif code[pc] == "sub" then
         local op2 = stack.pop()
         local op1 = stack.pop()

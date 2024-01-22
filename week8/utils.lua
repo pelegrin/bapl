@@ -229,6 +229,7 @@ function readall(filename)
 end
 
 local function isArrayType(t)
+  if not t then return false end
   return string.find(t, "%[")
 end
   
