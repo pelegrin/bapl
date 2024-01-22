@@ -170,6 +170,18 @@ local function Interpreter(debug)
     return tree
   end
   
+  local function tostatements(ast)
+    local declaration = ast.declaration
+    ast.declaration = nil
+    local assignment = ast
+    assignment.id = declaration.id
+    local r = {}
+    r.tag = "seq"
+    r.s1 = declaration
+    r.s2 = assignment
+    return r
+  end
+  
   -- Convert a function defenition 
   local function foldFunc(lst)
     tree = { tag = "funcdef" , ["type"] = lst[1], id = lst[2].val, size = lst[2].size, params = {}}
@@ -207,7 +219,7 @@ local function Interpreter(debug)
     if op == "+" then return val end -- folding of unary plus
     return { tag = "unop", op = op, e1 = val}
   end
-    
+      
   local space = lpeg.V("space")
 
   local function T(t)
@@ -267,6 +279,8 @@ local function Interpreter(debug)
   
   local idx = T"[" * expression * T"]"
   local declaration = types * id * idx^-1 * space
+  -- syntactic sugar, union declaration and assignment
+  local initialization = declaration /node("declaration", "type", "id", "size") * T"=" * (ternary + expression) / node("assign", "declaration", "exp")
   
   local setvar = id * T"=" * (ternary + expression) / node("assign", "id", "exp")
   local setindex = id * idx * T"=" * (ternary + expression) / node("setidx", "id", "indx", "exp")
@@ -290,6 +304,7 @@ local function Interpreter(debug)
               + Res"end"/node("end")
               + Res"while" * expression / node("while", "cond")
               + Res"done"/node("done")
+              + initialization / tostatements
               + declaration / node("declaration", "type", "id", "size")
               + assignment
               + sys * expression / node("sys", "opcode", "exp")
@@ -691,8 +706,10 @@ local function Interpreter(debug)
   
   local function printVars()
     ut.printtable(vars)
+    --[[
     print"Function in process of declaration"
     ut.printtable(fdeclared.getAll())
+    --]]
   end
   
   local function printFrame()
