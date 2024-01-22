@@ -182,7 +182,8 @@ function test_comments()
 end
 
 function test_true_false()
-  local vm = VM()
+  local stack = ut.Stack()
+  local vm = VM(stack, {})
   lu.assertEquals(vm._tOf(1 < 2), 1, " 1 < 2")
   lu.assertEquals(vm._tOf(2 > 1), 1, " 2 > 1")
   lu.assertEquals(vm._tOf(2 > 6), 0, " 2 > 6")
