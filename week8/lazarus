@@ -4,7 +4,7 @@ local laz = require "llang"
 local ut = require "utils"
 local VM = require "vm"
 
-local _version_ = "Lazarus interpreter v.0.1 ©2024 GoodCode"
+local _version_ = "Lazarus interpreter v.0.8 ©2024 GoodCode"
 
 local function Params(args)
   local params = {}
@@ -33,7 +33,6 @@ local function Params(args)
   return {
     isInteractive = findparam("-i"),
     isDebug = findparam("-d") or findparam("-debug"),
-    isCompile = findparam("-c"),
     isHelp = findparam("-h") or findparam("-help"),
     isVersion = findparam("-v"),
     path = getpath()
@@ -44,8 +43,7 @@ local function usage()
   return "Usage: " .. arg[0] .. " [options] path/<source_file> | ".. arg[0] .. " -i " .. [[
   where options:
       -i : Interactive mode. Executes source file if provided and switch to interactive mode
-      -d | -debug : Enabling printing internal data structures
-      -c : Compile mode, compile source file from path and saves it with .lzc extension
+      -d | -debug : Enabling printing internal debug information/data structures
       -h : Get this information
       -v : Print interpreter version      
   ]]
@@ -54,11 +52,11 @@ end
 local p = Params(arg)
 
 if p.isVersion then 
-  print(_version_)
+  print(_version_)  
+  if not p.path and not p.isInteractive and not p.isHelp then os.exit(0) end 
 end
 
 if not p.path and not p.isInteractive or p.isHelp then 
-  print(_version_)
   print(usage())
   os.exit(1)
 end
