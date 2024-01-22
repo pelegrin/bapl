@@ -19,7 +19,7 @@ local function printt(t, n)
 end
 
 local function printtable(t)
-  print(printt(t, 0))
+  io.write(printt(t, 0))
 end
 
 local function errorHandler(message, err)
