@@ -1,5 +1,6 @@
 local ut = require "utils"
 local systemlib = require "systemlib"
+local lang = require "llang"
 
 -- Lazarus VM
 local function VM(stack, mem, debug)  
@@ -14,7 +15,7 @@ local function VM(stack, mem, debug)
   end
     
   local function getAddress(ref)
-    if not string.match(ref, "^%$") then return nil end
+    if type(s) ~= "string" or not string.match(ref, "^%$") then return nil end
     ref = string.gsub(ref, "^%$", "") -- reference in stack
     return tonumber(ref)
   end
@@ -94,6 +95,19 @@ local function VM(stack, mem, debug)
         mem[code[n]].code = funccode.getAll()
         return counter
   end
+  
+  --initialize default value for variable
+  local function defaultVal(t)
+    if t == "string" then
+      return ''
+    elseif t == "number" then
+      return 0
+    elseif t == "bool" then
+      return lang.FALSE
+    else
+      return nil
+    end
+  end    
 
   local function run(code)
     local pc = 1
@@ -160,7 +174,7 @@ local function VM(stack, mem, debug)
         local t = code[pc]
         local s = nil
         if ut.isArrayType(t) then s = getIndx("Size must be a positive number") end
-        mem[code[num]] = {["type"] = t, ["size"] = s}
+        mem[code[num]] = {["type"] = t, ["size"] = s, val = defaultVal(t)}
       elseif code[pc] == "storeat" then
         -- top of stack index in array, and after that value
         local i = getIndx("Index must be a positive number")
