@@ -210,7 +210,11 @@ local function Interpreter(debug)
     tree = { tag = "funcdef" , ["type"] = lst[1], id = lst[2].val, size = lst[2].size, params = {}}
     local p = 1
     for i = 3, #lst, 2 do
-      tree.params[p] = { ["type"] = lst[i], id = lst[i + 1].val }  
+      if type(lst[i]) == "table" then
+        tree.params.default = lst[i]
+      else
+        tree.params[p] = { ["type"] = lst[i], id = lst[i + 1].val }  
+      end
       p = p + 1
     end
     return tree
@@ -223,6 +227,19 @@ local function Interpreter(debug)
       tree.params[p] = lst[i]  
       p = p + 1
     end
+    -- find declaration in scope and check params
+    -- if call using not all parameter adding default expression if exists
+    local scopes = scope.getAll()
+    for i = #scopes, 1, -1 do
+      for k,v in pairs(vars[scopes[i]]) do
+        if k == tree.id.val then
+          -- check number of parameters and default
+          if (v.params - #tree.params) == 1 then tree.params[#tree.params + 1] = v.default end
+          goto done
+        end
+      end
+    end
+    ::done::
     return tree
   end  
     
@@ -311,6 +328,7 @@ local function Interpreter(debug)
   local initialization = declaration /node("declaration", "type", "id", "size") * T"=" * (ternary + expression) / node("assign", "declaration", "exp")
   
   local setvar = id * T"=" * (ternary + expression) / node("assign", "id", "exp")
+  
   local setindex = id * idx * T"=" * (ternary + expression) / node("setidx", "id", "indx", "exp")
   local indexed = id * idx / node("getidx", "id", "indx")                   
   local assignment = setindex + setvar
@@ -358,7 +376,7 @@ local function Interpreter(debug)
                             return true
                           end),    
     types = lpeg.C(array + prTypes) * space,
-    funcdef = lpeg.Ct(types * Res"func" * id * T"(" * (types * id)^-1 * (T"," * (types * id))^0 * T")") / foldFunc
+    funcdef = lpeg.Ct(types * Res"func" * id * T"(" * (types * id)^-1 * (T"," * types * id)^0 * (T"=" * expression)^-1 * T")") / foldFunc
              + lpeg.Ct(types * Res"func" * id ) / foldForwardFunc,
     funcall = lpeg.Ct(id * T"(" * expression ^-1 * (T"," * expression)^0 * T")") / foldFuncCall
   })
@@ -418,9 +436,10 @@ local function Interpreter(debug)
     if s and not s.forward then 
       error("id with name " .. id .." already defined")
     elseif s and s.forward then
-      --full declaration
+      --full declaration      
       if p then
         vars[cscope][id].params = #p
+        if p.default then vars[cscope][id].default = p.default; p.default = nil end
         params.clear()
         for _,v in ipairs(p) do
           params.add(v)
@@ -442,6 +461,7 @@ local function Interpreter(debug)
     nvars = num
     declared.add({id = id, scope = cscope})
     if p then
+      if p.default then vars[cscope][id].default = p.default; p.default = nil end
       vars[cscope][id].params = #p
       params.clear()
       for _,v in ipairs(p) do

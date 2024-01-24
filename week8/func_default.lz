@@ -1,0 +1,13 @@
+number func sum(number x, number y = 5 + 1)
+  return x + y
+end
+
+@sum(5) // Print 11
+@sum(5, 4) // Print 9
+
+number func double(number x = 2)
+  return 2 * x
+end
+
+@double() //Print 4
+@double(3) //Print 6
