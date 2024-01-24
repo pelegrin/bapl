@@ -7,7 +7,7 @@ number func even(number n)
   return odd(n)
 end
 
-number func odd(number n)
+number func odd(number n = 2)
   if n % 2 != 0
     return 1
   end
@@ -15,3 +15,5 @@ number func odd(number n)
 end
 
 @even(11) // prints 1
+
+@odd() // prints 0  
