@@ -3,8 +3,9 @@
 local laz = require "llang"
 local ut = require "utils"
 local VM = require "vm"
+local systemlib = require "systemlib"
 
-local _version_ = "Lazarus interpreter v.0.8 ©2024 GoodCode"
+local _version_ = "Lazarus interpreter v.0.8 ©2024 GoodCode" .. "\n" .. systemlib._version
 
 local function Params(args)
   local params = {}
@@ -35,6 +36,7 @@ local function Params(args)
     isDebug = findparam("-d") or findparam("-debug"),
     isHelp = findparam("-h") or findparam("-help"),
     isVersion = findparam("-v"),
+    isCompile = findparam("-c"),
     path = getpath()
   }
 end
@@ -56,7 +58,7 @@ if p.isVersion then
   if not p.path and not p.isInteractive and not p.isHelp then os.exit(0) end 
 end
 
-if not p.path and not p.isInteractive or p.isHelp then 
+if not p.path and not p.isInteractive and not p.isCompile or p.isHelp then 
   print(usage())
   os.exit(1)
 end
@@ -66,6 +68,17 @@ local ip = laz.Interpreter(p.isDebug)
 local mem = {}
 local stack = ut.Stack()
 local vm = VM(stack, mem, p.isDebug)
+
+if p.isCompile then
+  local code = ip.interpretf(p.path)
+  for _, v in ipairs(code) do
+      if type(v) == "string" then
+        v = "\"" ..v .. "\""
+      end
+      io.write(v, ", ")
+  end
+  os.exit(0)
+end
 
 
 if not p.isInteractive then

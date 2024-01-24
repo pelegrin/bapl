@@ -1,27 +1,17 @@
 local ut = require "utils"
+local systemlib = require "systemlib"
 
 -- Lazarus VM
 local function VM(stack, mem, debug)  
-  --add system functions, ideally should be implemented in Lazarus
-    mem["substring"] = { func = 
-    function (s)
-      local str = s.pop()
-      local n = s.pop()
-      if type(str) ~= "string" or type(n) ~= "number" then
-        error("Error executing system function substring. Wrong parameters")
-        os.exit(1)
-      end
-      n = math.floor(n)
-      if n > 0 then 
-        return string.sub(str, 1, n)
-      elseif n < 0 then
-        return string.sub(str, n)
-      else 
-        return s
-      end
-    end,
-      params = 2
-    }
+  --add system functions, implemented in Lazarus
+    mem = mem or {}
+    for k,v in pairs(systemlib.vm) do
+      mem[k] = v
+    end
+  
+  local function version()
+    return systemlib._version
+  end
     
   local function getAddress(ref)
     if not string.match(ref, "^%$") then return nil end
@@ -118,30 +108,33 @@ local function VM(stack, mem, debug)
       elseif code[pc] == "call" then
         pc = pc + 1
         local adr = code[pc]
-        if type(adr) == "string" then
-          stack.push(mem[adr].func(stack.copy()))
-        else
-          local funccode = mem[adr].code
-          local forward = mem[adr].forward
-          if not funccode and not forward then error("Function is not initialized") end
-          local numofparams = mem[adr].params or 0
-          local i = numofparams        
-          local m = {}
-          ut.copyTable(mem, m)
-          -- add parameters in memory with minus indecies
-          while i > 0 do
-            m[-i] = {val = stack.pop()}
-            i = i - 1
-          end        
-          local vm = VM(stack.copy(), m, debug)
-          stack.push(vm.run(funccode)) -- push return value on stack
-          --closure implementation
-          --copy memory back, only if return value of type func        
-          if mem[adr].rettype == "func" then
-            ut.copyTable(m, mem)
-          else
-            ut.updateTable(m, mem) -- update upper scope, only existing keys in memory updated, local vars disappears
+        local funccode = mem[adr].code
+        local forward = mem[adr].forward
+        if not funccode and not forward then error("Function is not initialized") end
+        local numofparams = mem[adr].params or 0
+        local i = 1        
+        local m = {}
+        ut.copyTable(mem, m)
+        -- add parameters in memory with minus indecies          
+        while i <= numofparams do
+          local v = stack.pop()
+          m[-i] = {val = v}
+          if type(v) == "string" then 
+            m[-i]["size"] = string.len(v)
+            m[-i]["type"] = "string"
+          elseif type(v) == "table" then
+            m[-i]["size"] = #v
           end
+          i = i + 1
+        end        
+        local vm = VM(stack.copy(), m, debug)
+        stack.push(vm.run(funccode)) -- push return value on stack
+        --closure implementation
+        --copy memory back, only if return value of type func        
+        if mem[adr].rettype == "func" then
+          ut.copyTable(m, mem)
+        else
+          ut.updateTable(m, mem) -- update upper scope, only existing keys in memory updated, local vars disappears
         end
       elseif code[pc] == "ret" then return stack.pop() -- return top of the stack
       elseif code[pc] == "push" then
@@ -187,19 +180,29 @@ local function VM(stack, mem, debug)
         if (i > size) then
           error("Index " .. tostring(i) .. " is out of range. Must be <= " .. tostring( size))
         end
-        local v = mem[code[pc]].val[i]
-        if v == nil then error("Element is not initialized at index ".. i) end -- TODO: Return NULL value instead
+        local t = mem[code[pc]]["type"]
+        local v
+        if t == "string" then
+          v = string.sub(mem[code[pc]].val, i, i)
+        else
+          local v = mem[code[pc]].val[i]
+          if v == nil then error("Element is not initialized at index ".. i) end -- TODO: Return NULL value instead
+        end
         stack.push(v)
       elseif code[pc] == "store" then
          pc = pc + 1
          local v = mem[code[pc]]
-         if v["type"] == "func" then
+         local t = v["type"]
+         if t == "func" then
            local ref = getAddress(stack.pop()) -- reference in stack
            v.code = mem[ref].code -- copy code to referenced function
            v.params = mem[ref].params
            v.rettype = mem[ref].rettype
+         elseif t == "string" then
+           v.val = stack.pop()
+           v.size = string.len(v.val)
          else  
-          v.val = stack.pop()
+          v.val = stack.pop()          
          end 
       elseif code[pc] == "syscall" then
          pc = pc + 1        
@@ -209,6 +212,7 @@ local function VM(stack, mem, debug)
         local op2 = stack.pop()
         local op1 = stack.pop()
         if type(op1) == "string" then 
+          --concat impl for strings
           stack.push(op1 .. op2)
         else
           stack.push(op1 + op2)
@@ -268,8 +272,15 @@ local function VM(stack, mem, debug)
       elseif code[pc] == "not" then
         stack.push( revTof(stack.pop()) )
       elseif code[pc] == "size" then
-        local ref = getAddress(stack.pop())
-        stack.push(mem[ref].size)  
+        local adr = stack.pop()
+        local ref = getAddress(adr)
+        if ref then 
+          -- size operation for arrays
+          stack.push(mem[ref].size)  
+         else
+           -- size operation for strings
+           stack.push(string.len(adr))
+        end
       elseif code[pc] == "jmpz" then
         pc = pc + 1
         local jmpDelta = code[pc]

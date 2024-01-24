@@ -1,5 +1,6 @@
 local lpeg = require "lpeg"
 local ut = require "utils"
+local systemlib = require "systemlib"
 
 local lang = {}
 
@@ -15,9 +16,10 @@ local FALSE = false
   
 local function Interpreter(debug)  
   local vars = {}
-  local system = {
-    ["substring"] = {val = "substring", ["type"] = "func", rettype = "string", scope = "system", params = 2}
-  }
+  system = {}
+  for k,v in pairs(systemlib.interpreter) do
+    system[k] = v
+  end  
   vars["$"] = system
   local nvars = 0
   local params = ut.List()
@@ -55,12 +57,13 @@ local function Interpreter(debug)
    
   -- Allow types for unary operator
   local opAllowTypes = {
-    ["#"] = {"[number]", "[bool]", "[func]"},
+    ["#"] = {"[number]", "[bool]", "[func]", "string"},
     ["--"] = {"number"},
     ["++"] = {"number"},
     ["-"] = {"number"},
     ["+"] = {"number", "string"},
-    ["!"] = {"bool"}
+    ["!"] = {"bool"},
+    ["indx"] = {"[number]", "[bool]", "[func]", "[string]", "string"}
   }
     
   local function checkType(t1, t2, m)
@@ -134,7 +137,7 @@ local function Interpreter(debug)
   local function node(tag, ...)
     local labels = table.pack(...)
     return function (...)
-      local params = table.pack(...)
+      local p = table.pack(...)
       local t = {}
       if type(tag) == "table" then
         for k,v in pairs(tag) do t[k] = v end
@@ -142,10 +145,19 @@ local function Interpreter(debug)
         t["tag"] = tag -- for backward compatibility
        end 
       for i, v in ipairs(labels) do
-        t[v] = params[i]
+        t[v] = p[i]
         if tag == "var" and v == "val" then
           -- in variable case, get type from vars
-          t["type"] = ( (vars[scope.getLast()] or {})[params[i]] or {})["type"]
+          t["type"] = ( (vars[scope.getLast()] or {})[p[i]] or {})["type"]
+          if not t["type"] then
+            --get type from func parameter
+            for _,pr in ipairs(params.getAll()) do
+              if t["val"] == pr["id"] then
+                t["type"] = pr["type"]
+                break
+              end
+            end
+          end
         end
         if tag == "getidx" and v == "id" then 
           -- in case of array get type from id table
@@ -272,7 +284,8 @@ local function Interpreter(debug)
   local opA = lpeg.C(lpeg.S("+-")) * space -- addition/substraction
   local opM = lpeg.C(lpeg.S("*/%")) * space -- multiplication/division
   local opE = lpeg.C(lpeg.S("^")) * space   -- exponent
-  local opC = lpeg.C(lpeg.P("<=") + ">=" + "==" + "!=" + "<" + ">" + "&" + "|") * space -- comparasion
+  local opC = lpeg.C(lpeg.P("<=") + ">=" + "==" + "!=" + "<" + ">") * space -- comparasion
+  local opL = lpeg.C(lpeg.P("&&") + "||") * space -- AND and OR
   local opUn = lpeg.C(lpeg.P("--") + "++" + "-" + "+" + "!" + "#") -- unary operators
   local variable = (sym^1 + T"_" * T"_"^-1 * sym^1) * loc.alnum^0 / node("var", "val") * space
   local ref = lpeg.S("$") * (sym^1 * loc.alnum^0 / node("ref", "val") ) * space
@@ -283,7 +296,8 @@ local function Interpreter(debug)
   local ternary = lpeg.V("ternary")
   local term = lpeg.V("term")
   local exponent = lpeg.V("exponent")
-  local subexpression = lpeg.V("subexpression")
+  local additionsubstraction = lpeg.V("additionsubstraction")
+  local comparison = lpeg.V("comparison")
   local expression = lpeg.V("expression")
   local types = lpeg.V("types")
   local statement = lpeg.V("statement")
@@ -334,9 +348,10 @@ local function Interpreter(debug)
     unary = lpeg.Ct(opUn * primary) /foldUn + primary,    
     exponent = lpeg.Ct(unary * (opE * unary)^0) / foldBin,
     term = lpeg.Ct(exponent * (opM * exponent)^0) / foldBin,
-    subexpression = lpeg.Ct(term * (opA * term)^0) / foldBin,
+    additionsubstraction = lpeg.Ct(term * (opA * term)^0) / foldBin,
+    comparison = lpeg.Ct(additionsubstraction * (opC * additionsubstraction)^0) / foldBin,  
+    expression = lpeg.Ct(comparison * (opL * comparison)^0) / foldBin,
     ternary = lpeg.Ct(expression * T"?" * expression * T":" * expression) / foldTernary,
-    expression = lpeg.Ct(subexpression * (opC * subexpression)^0) / foldBin,
     space = (lpeg.S(" \t\n") + comments)^0
                   * lpeg.P(function (_, p)
                             maxmatch = math.max(maxmatch, p);
@@ -351,7 +366,7 @@ local function Interpreter(debug)
   local ops = {["+"] = "add", ["-"] = "sub",
                ["*"] = "mul", ["/"] = "div", ["^"] = "exp", ["%"] = "rem",
                ["<="] = "lq", [">="] = "gq", ["=="] = "eq", ["!="] = "nq", ["<"] = "lt", [">"] = "gt",
-               ["&"] = "and", ["|"] = "or"
+               ["&&"] = "and", ["||"] = "or"
              }    
   local unops = {["--"] = "dec", ["++"] = "inc", ["-"] = "minus", ["!"] = "not", ["#"] = "size",
           }              
@@ -389,7 +404,8 @@ local function Interpreter(debug)
   -- TODO: merge with checkType
   local function checkAssignType(id, t2)    
     if t2 == nil or id == nil then return end
-    local v = getVar(id.val, t2)    
+    local v = getVar(id.val, t2) 
+    if not v or not v.type then return end
     if string.gsub(v.type, "[%[%]]","") ~= string.gsub(t2, " ", "")  then
       error("Type checking error. Expected " .. string.gsub(v.type, "[%[%]]", "") .. " but get " .. string.gsub(t2, " ",""))
     end
@@ -463,9 +479,8 @@ local function Interpreter(debug)
     elseif ast.tag == "getidx" then
       checkType("number", ast.indx.type, "Array index must be a number\n")
       local v = getVar(ast.id.val)
-      local t = v.type or ""
-      t = string.gsub(t, "%a+", "")
-      checkType(t, "[]", "Type should be array to use indecies\n")
+      local t = v.type or ast.type
+      isAllowTypeForOp("indx", t)
       codeExp(ast.indx, ast.indx.type)
       addCode("loadat")
       addCode(v.val)
@@ -473,7 +488,7 @@ local function Interpreter(debug)
       local record = getVar(ast.id.val)
       local astp = #ast.params or 0
       local fp = record.params
-      if fp and fp ~= astp then
+      if not record.forward and fp and fp ~= astp then
         error("Function ".. tostring(record.name) .. " must have " .. tostring(fp) .. " params but called with " .. tostring(astp))
       end
       --push parameters on stack in reverse order 
@@ -638,6 +653,7 @@ local function Interpreter(debug)
         local funccode = code.getSection(adr, code.lastPosition())
         vars[g.scope][g[1]].code = funccode
         scope.removeLast()
+        params.clear()
       else 
         fixAddress(code.lastPosition(), adr)
       end  

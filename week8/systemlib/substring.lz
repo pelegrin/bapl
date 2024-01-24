@@ -1,0 +1,23 @@
+string func sub(string s, number i)
+  if #s == 0 || i == 0 || i > #s || -i > #s
+    return s
+  end
+
+  number indx, number j
+  if i > 0
+    indx = i
+    j = 1
+  else 
+    j = (#s + i) + 1
+    indx = -i
+  end
+
+  string r = ''
+  while indx > 0
+    r = r + s[j]
+    j = j + 1
+    indx = indx - 1
+  done
+  return r
+
+end
