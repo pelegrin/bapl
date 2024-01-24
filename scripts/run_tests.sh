@@ -2,10 +2,13 @@
 
 EXIT_CODE=0
 for sut in $(find . -iregex ".*\(test_.*\).lua"); do
-    echo "Running tests in ${sut}" 
     sut_dir=$(dirname ${sut}) 
     sut_file=$(basename ${sut})
-    LUA_PATH="${sut_dir}/?.lua;;" lua ${sut}
+    echo "Running tests in ${sut_dir}"
+    echo "${sut}" 
+    cd ${sut_dir}
+    LUA_PATH="${sut_dir}/?.lua;;" lua ${sut_file}
+    cd ..
     if [ $? -ne 0 ]; then
         EXIT_CODE=1
     fi
