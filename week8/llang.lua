@@ -230,12 +230,16 @@ local function Interpreter(debug)
     -- find declaration in scope and check params
     -- if call using not all parameter adding default expression if exists
     local scopes = scope.getAll()
-    for i = #scopes, 1, -1 do
-      for k,v in pairs(vars[scopes[i]]) do
-        if k == tree.id.val then
-          -- check number of parameters and default
-          if (v.params - #tree.params) == 1 then tree.params[#tree.params + 1] = v.default end
-          goto done
+    for i = #scopes, 1, -1 do   
+      varsInScope = vars[scopes[i]]
+      if varsInScope then 
+        for k,v in pairs(varsInScope) do
+          if k == tree.id.val then
+            if v.forward then goto done end -- forward declaration is not supported with default parameters
+            -- check number of parameters and default
+            if (v.params - #tree.params) == 1 then tree.params[#tree.params + 1] = v.default end
+            goto done
+          end
         end
       end
     end
