@@ -1,0 +1,4 @@
+number x
+@x //default 0
+bool y
+@y // default false
