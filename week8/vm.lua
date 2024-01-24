@@ -15,7 +15,7 @@ local function VM(stack, mem, debug)
   end
     
   local function getAddress(ref)
-    if type(s) ~= "string" or not string.match(ref, "^%$") then return nil end
+    if type(ref) ~= "string" or not string.match(ref, "^%$") then return nil end
     ref = string.gsub(ref, "^%$", "") -- reference in stack
     return tonumber(ref)
   end
@@ -121,7 +121,8 @@ local function VM(stack, mem, debug)
         mem[code[n]] = {["type"] = "func", forward = true, rettype = code[pc]}
       elseif code[pc] == "call" then
         pc = pc + 1
-        local adr = code[pc]
+        local adr = code[pc]        
+        if (adr < 0) then adr = getAddress(mem[adr].val) end -- func as parameter
         local funccode = mem[adr].code
         local forward = mem[adr].forward
         if not funccode and not forward then error("Function is not initialized") end

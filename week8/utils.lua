@@ -40,12 +40,14 @@ end
 -- deep copy implementation
 local function copyTable(source, dest)
   for i,v in pairs(source) do
+--    if type(i) == "number" and i < 0 then goto continue end
     if type(v) == "table" then      
       dest[i] = {}
       copyTable(v, dest[i])
      else       
        dest[i] = v
      end
+     ::continue::
   end
 end  
 

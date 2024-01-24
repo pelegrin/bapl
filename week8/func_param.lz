@@ -1,0 +1,13 @@
+func func const(number x)
+  number y = x + 1
+  number func inner()
+    return y
+  end
+  return inner
+end
+
+number func adder(number x, func f)
+  return x + f()
+end
+
+@adder(40, const(1)) // Print 42
