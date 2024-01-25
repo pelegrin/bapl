@@ -1,0 +1,20 @@
+number x
+x = 1
+
+number func one()
+  number x
+  x = 2
+  @x
+  return x
+end
+number func two()
+  number x
+  x = 3
+  @x
+  return x
+end
+@x 
+one()
+two() //prints 1, 2, 3 variables redifined in scope, using local first then global
+
+
