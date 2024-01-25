@@ -235,7 +235,7 @@ local function Interpreter(debug)
       if varsInScope then 
         for k,v in pairs(varsInScope) do
           if k == tree.id.val then
-            if v.forward then goto done end -- forward declaration is not supported with default parameters
+            if v.forward or not v.params then goto done end -- forward declaration is not supported with default parameters
             -- check number of parameters and default
             if (v.params - #tree.params) == 1 then tree.params[#tree.params + 1] = v.default end
             goto done
@@ -516,9 +516,11 @@ local function Interpreter(debug)
         error("Function ".. tostring(record.name) .. " must have " .. tostring(fp) .. " params but called with " .. tostring(astp))
       end
       --push parameters on stack in reverse order 
-      for i = #ast.params,1, -1  do
-        codeExp(ast.params[i])
-       end
+      if astp > 0 then
+        for i = astp, 1, -1  do
+          codeExp(ast.params[i])
+         end
+      end
        addCode("call")
    --  if not record.code then error("Function ".. tostring(ast.id.val) .. " is not initialized") end
        addCode(record.val) 
@@ -577,7 +579,9 @@ local function Interpreter(debug)
       isAllowTypeForOp(ast.op, t)
       codeExp(ast.e1, t)
       addCode(unops[ast.op])
-    else error("invalid tree")
+    else 
+      print(ast)
+      error("invalid tree")
     end    
   end
 

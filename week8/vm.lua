@@ -122,7 +122,7 @@ local function VM(stack, mem, debug)
       elseif code[pc] == "call" then
         pc = pc + 1
         local adr = code[pc]        
-        if (adr < 0) then adr = getAddress(mem[adr].val) end -- func as parameter
+        if (type(adr) == "number" and adr < 0) then adr = getAddress(mem[adr].val) end -- func as parameter
         local funccode = mem[adr].code
         local forward = mem[adr].forward
         if not funccode and not forward then error("Function is not initialized") end
