@@ -1,0 +1,3 @@
+[number] y[3]
+@#y // print size of array, 3
+@y

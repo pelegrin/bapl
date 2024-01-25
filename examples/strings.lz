@@ -1,0 +1,8 @@
+string s = 'The Lazarus language' + ' is cool'
+@s
+s = substring(s, 11)
+if s == 'The Lazarus' 
+  @'YES'
+end
+@#s //print 11
+@s[1] //print T
