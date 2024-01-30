@@ -1,0 +1,2 @@
+number x = 1
+x > 0 ? @'YES' : @'NO'

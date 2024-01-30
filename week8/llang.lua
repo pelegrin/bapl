@@ -345,7 +345,7 @@ local function Interpreter(debug)
   local funcall = lpeg.V("funcall")  
 
   local grammar = lpeg.P({"prog",
-    prog = space * funcdef + space * statements * -1 + space * bcommentS^-1 * bcommentE^-1,
+    prog = space * funcdef + space * ternary + space * statements * -1 + space * bcommentS^-1 * bcommentE^-1,
     statements = lpeg.Ct(statement * (T"," * (statement))^0) / foldSts,    
     statement = Res"return" * expression / node("return", "val")
               + Res"if" * expression / node("if", "cond") 
@@ -358,7 +358,6 @@ local function Interpreter(debug)
               + declaration / node("declaration", "type", "id", "size")
               + assignment
               + sys * expression / node("sys", "opcode", "exp")
-              + ternary
               + expression,
     primary = numerals
               + literals
@@ -373,7 +372,7 @@ local function Interpreter(debug)
     additionsubstraction = lpeg.Ct(term * (opA * term)^0) / foldBin,
     comparison = lpeg.Ct(additionsubstraction * (opC * additionsubstraction)^0) / foldBin,  
     expression = lpeg.Ct(comparison * (opL * comparison)^0) / foldBin,
-    ternary = lpeg.Ct(expression * T"?" * expression * T":" * expression) / foldTernary,
+    ternary = lpeg.Ct(expression * T"?" * statement  * T":" * statement) / foldTernary,
     space = (lpeg.S(" \t\n") + comments)^0
                   * lpeg.P(function (_, p)
                             maxmatch = math.max(maxmatch, p);
@@ -548,22 +547,6 @@ local function Interpreter(debug)
       addCode("noop")
       local fixAddr = code.lastPosition() - adr
       code.replace(fixAddr, adr)      
-    elseif ast.tag == "ternary" then
-      codeExp(ast.cond, t)
-      addCode("jmpz")
-      addCode(0)
-      local adr = code.lastPosition()
-      codeExp(ast.e1, t)
-      addCode("jmp")
-      addCode(0)
-      local adr2 = code.lastPosition()
-      addCode("noop")
-      local fixAddr = code.lastPosition() - adr     
-      code.replace(fixAddr, adr)
-      codeExp(ast.e2, t)
-      addCode("noop")
-      fixAddr = code.lastPosition() - adr     
-      code.replace(fixAddr, adr2)  
     elseif ast.tag == "binop" then
       isAllowTypeForOp(ast.op, ast.e1.type)
       isAllowTypeForOp(ast.op, ast.e2.type)
@@ -580,7 +563,7 @@ local function Interpreter(debug)
       codeExp(ast.e1, t)
       addCode(unops[ast.op])
     else 
-      print(ast)
+      ut.printtable(ast)
       error("invalid tree")
     end    
   end
@@ -651,6 +634,22 @@ local function Interpreter(debug)
       addCode("jmpz")
       addCode(0) -- jump address to fix
       jmpAddress.add(code.lastPosition())
+    elseif ast.tag == "ternary" then
+      codeExp(ast.cond, t)
+      addCode("jmpz")
+      addCode(0)
+      local adr = code.lastPosition()
+      codeStatement(ast.e1, t)
+      addCode("jmp")
+      addCode(0)
+      local adr2 = code.lastPosition()
+      addCode("noop")
+      local fixAddr = code.lastPosition() - adr     
+      code.replace(fixAddr, adr)
+      codeStatement(ast.e2, t)
+      addCode("noop")
+      fixAddr = code.lastPosition() - adr     
+      code.replace(fixAddr, adr2)  
     elseif ast.tag == "if" then
       codeExp(ast.cond)
       addCode("jmpz")
