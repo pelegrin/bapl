@@ -32,6 +32,11 @@ Or can start coding in LAZ right in command line.
 
 Image is based on Alpine Linux and optimized.
 
+For using image with editor please use the following command
+`docker run -it --entrypoint /bin/bash pelegrin/lazarus:1.0`
+Command `lazarus` is avaliable in path for running source files.
+
+
 ## Using the tool
 To run lazarus with source file or in interactive mode place the following command
 `lazarus [options] <source_file>` or  `lazarus -i ` (for interactive mode)
@@ -109,7 +114,7 @@ f()
 ```
 
 ### Strings
-Strings are fully supported in Lazarus.
+Strings are fully supported in Lazarus. Strings represent text.
 Mathematical `+` in case of strings do the concatenational of strings.
 Example:
 ```
@@ -145,22 +150,29 @@ Different comparasion operators are supported like
 Supported *decrement, increment, unary minus.* (--, ++, -) in infix notation. 
 Size operator `#` can be used for some data types, namely arrays and strings. In both cases, it returns size of array or string (number of literals) accordinly. 
 
-### Logical operators
+### Relational Operators
 Lazarus provides the following relational operators.
 `< > <= >= == !=`
+
+### Logical Operators
 Logical `&&` (AND)  and `||` (OR) operators are also provided. Short-cut calculations are used for it. For example, 
 ```
 number x = 0
 x != 0 && 1/x
 ```
-works without any problem, as 1/x is even not calcucaled.
-Logical ! `NOT` exists for boolean type.
+works without any problem, as 1/x even not calcucaled.
 
+Logical ! `NOT` operator is avaliable for boolean type.
 
 ### Ternary operator
-Language provides ternary operator for conditional expression calculation.
+Language provides ternary operator for conditional calculation.
 `<condition>? true statement : false statement`
-true expression only evaluates when result of condition expression is true
+true statement only evaluates when result of condition expression is true
+Example,
+```
+number x = 1
+x > 0 ? @'YES' : @'NO' //prints YES
+```
 
 ## Identifiers
 
@@ -200,7 +212,7 @@ else
   @'NO'
 end
 ```
-### Cycle
+### While statement
 At the moment language only supports `while` control structure for cycles.
 Syntax of while statement 
 ```
@@ -210,7 +222,10 @@ done
 ```
 Statements are repreated while condition is true.
 
-## Function declaration
+## Functions 
+Functions are the main mechanism for abstraction of statements in Lazarus.
+Functions can compute and return values. Function can be used in any expression of Lazarus language.
+
 Before used, function should be declared.
 Syntax is the following.
 ```
