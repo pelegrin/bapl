@@ -85,8 +85,15 @@ local function Interpreter(debug)
   local function checkParams(id, t)
     for i,v in ipairs(params.getAll()) do
       if v.id == id then 
-        checkType(t, v.type) 
-        return {val = -i }
+        if ut.isArrayType(v.type) then 
+          checkType(t, string.gsub(v.type, "[%[%]]",""))
+        else
+          checkType(t, v.type) 
+        end
+        return { val = -i,
+                ["type"] = v.type,
+                size = v.size
+          }
       end
     end
     return nil
@@ -424,11 +431,13 @@ local function Interpreter(debug)
         
   -- TODO: merge with checkType
   local function checkAssignType(id, t2)    
-    if t2 == nil or id == nil then return end
+    if t2 == nil or t2 == "" or id == nil then return end
     local v = getVar(id.val, t2) 
     if not v or not v.type then return end
-    if string.gsub(v.type, "[%[%]]","") ~= string.gsub(t2, " ", "")  then
-      error("Type checking error. Expected " .. string.gsub(v.type, "[%[%]]", "") .. " but get " .. string.gsub(t2, " ",""))
+    t1 = string.gsub(v.type, "[%[%]]","")
+    t2 = string.gsub(t2, " ", "")
+    if t1 ~= t2  then
+      error("Type checking error. Expected " .. t1 .. " but get " .. t2)
     end
   end    
   

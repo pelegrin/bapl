@@ -3,3 +3,4 @@ while i > 0
    x[i] = i + 5, i = i - 1
 done
 @x
+@x[3]
