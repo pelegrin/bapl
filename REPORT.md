@@ -167,8 +167,8 @@ I've got a big pleasure to participate in course and `absorb` materials
 | Language criteria             | Score      | Comment
 |-------------------------------|------------|------------
 | Language Completeness         |   3        | More then one challenge coded into the language                                                           |
-| Code Quality & Report         |   3        | Separated language tools from VM implementation. System library                                           |
-| Originality & Scope           |   3        | Quite original implementation deviates for Selene. Creative and originality is in questien. Would put 2.5 |
+| Code Quality & Report         |   2        | Separated language tools from VM implementation. System library. Lack of code organization in modules     |
+| Originality & Scope           |   3        | Quite original implementation deviates for Selene. Creative and originality is in questien.               |
 | Self assesment                |   2        |                                                                                                           |
 
 ## References
