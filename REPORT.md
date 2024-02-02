@@ -10,7 +10,8 @@ Language syntax is quite different from Selene provided on the course.
 Lazarus is a strongly typed scripting language. One of the design goal was to provide environment for statement execution (more like in Lua) in interactive mode. Lazarus uses different memory layout for VM and different mechanism for function execution. Example of memory can be seen in interactive mode (`-i` option) with :m command. Each function executes in separate environment with prepared memory with global variables/variables in scope and parameters. Parameters are not placed in stack, but in a special memory location.
 Closures for functions are also implemented using memory back copy technique.
 VM supports input output stream redirection (it borrows implementation from Lua)
-With help of it was able to implement integration tests,
+
+With help of it we were able to implement integration tests for system functions like in
 test snippet here 
 ```
   local cmd1 = [[
@@ -18,12 +19,12 @@ test snippet here
   ]]
   lu.assertEquals(getSubstring(cmd1), "Hel", "first 3 symbols from string")
 ```
-Helps to test system functions written in Lazarus via Lua 
+Note that we are testing Lazarus functions via interpeter and VM with Lua 
 
 Description of new features in language.
 
-### Ternary operator
-Lazarus provides a ternary operator as a compact version of if-else control structure.
+### Ternary statement
+Lazarus provides a ternary statament as a compact version of if-else control structure.
 Syntax is 
 `expression ? true_statement : false_statement`.
 
