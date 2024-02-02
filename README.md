@@ -1,14 +1,12 @@
 
 # Lazarus language
 
-Lazarus is a small but powerful strongly typed scripting language inspired by lua. The main design decision is to provide interpretation of the source file, so-called LAZ files, as well as interactive environment for executing Lazarus line by line.
+Lazarus is a small but powerful strongly typed scripting language inspired by Lua. One of the design decision was to provide interpretation of the source file, so-called LAZ files, as well as interactive environment for executing Lazarus line by line. (Greatly inspired by Lua as well)
 
 ## How to get the tool
 Official Docker image is provided on Docker Hub.
 To play with Lazarus interpreter, you can use command:
 `docker run -it --name lazarus pelegrin/lazarus:1.0`
-
-If you want an source editor, vim is provided in Docker image, use the follwing command
 
 You jump right into the action
 ```
@@ -30,12 +28,15 @@ System library v.0.8
 Image supplied with example LAZ files, which can be run with :run filename command.
 Or can start coding in LAZ right in command line.
 
-Image is based on Alpine Linux and optimized.
+If you want an source editor, vim is provided in Docker image, use the follwing command
+`docker run -it --entrypoint /bin/bash pelegrin/lazarus:1.0` and `vim` in shell
 
-For using image with editor please use the following command
-`docker run -it --entrypoint /bin/bash pelegrin/lazarus:1.0`
 Command `lazarus` is avaliable in path for running source files.
 
+Image is based on Alpine Linux and optimized.
+
+Also possible to use language tools by cloning repository. In this case host maschine should have installed Lua (5.3 and greater) and lpeg (via LuaRocks for example). Consult with these tools documentation for you platform on how to install.
+Using of Docker image is highly recommended.
 
 ## Using the tool
 To run lazarus with source file or in interactive mode place the following command
@@ -52,17 +53,19 @@ To do that provide both path to source file and -i switch. It gives the benefit 
 
 ## Developing the tool
 Clone repository and submit PR request with description of changes.
-Folder structure.
-Dockerfile - official Docker image
-examples - LAZ source files with varios language examples. Also provided in Docker image.
-package - latest version intepreter using in Docker image
-scripts - Test and additional bash scripts.
-systemlib - current version of system lib with sources in Lazarus language.
-week1-week8 - Lazarus interpreter in different readiness stages (developed in BAPL course)
+Folder structure
+* Dockerfile - official Docker image
+* examples - LAZ source files with varios language examples. Also provided in Docker image.
+* package - latest version intepreter using in Docker image
+* scripts - Test and additional bash scripts.
+* systemlib - current version of system lib with sources in Lazarus language.
+* week1-week8 - Lazarus interpreter in different readiness stages (developed in BAPL course)
 
 
 ### Running tests
-Two scripts are provided in scripts folder. run_sources.sh execute all source files with interpreter and run_tests.sh runs all lua tests file.
+Two scripts are provided in scripts folder.
+* run_sources.sh execute all source files with interpreter
+* run_tests.sh runs all lua tests file.
 
 # Lazarus language
 Lazarus is a strongly typed language. Any variable should be declared first, before usage.
@@ -71,7 +74,9 @@ Syntactic sugar statement `number a = 1` also can be used. Language recognize it
 
 ## Types and Values
 ### Booleans
-The boolean types represented by number type. 1 (and any other number) represents `true` and 0 represents `false`
+Built in type with two possible values `true` and `false`.
+Internally represented as number 0 for false and 1 for true.
+
 ### Numbers
 The number type represents real (double-precision floating-point) numbers.
 We can write numeric constants with an optional decimal part, plus an optional decimal exponent. Examples of valid numeric constants are:
@@ -81,9 +86,41 @@ Language supports numbers in hexadecimal that starts with `0X` or `0x`.
 Examples are: 
 `0xFF 0X1AB 0x99`
 
+### Strings
+Strings are fully supported in Lazarus. Strings represent text.
+Mathematical `+` in case of strings do the concatenational of strings.
+Example:
+```
+string s = 'The Lazarus language' + ' is cool'
+```
+For strings also supported length operator `#` and getting literal via indexing, like in this example,
+`s[1] == 'T'` (puts true on a stack)
+
+### Array
+An array in Lazarus is a fixed-size collection of similar data items. In other words, elements in array can only be of one type.
+Array always support length operator `#` and returns a size of array provided by declaration.
+For array Lazarus supports indecies operator for getting element of array.
+Syntax is
+`id[number]`, where number should be from 1 to size of array. Language performs size checking at runtime
+Example of declacation and using of array.
+```
+number i = 5, [number] x[i]
+while i > 0
+   x[i] = i + 5, i = i - 1
+done
+@x
+```
 ### Functions
 Functions in Lazarus are a first class citizens. They can be used as return value from other functions or as parameters to function calls. Functions also can be used in assignments.
-Variable type should be a function in this case, like here
+Syntax for declaring functions are
+`<type> func id (parameters)` where parameters can be comma separated list of <type> id
+`statement`
+....
+`return statement`
+`end`
+
+Here is example of function declaration (factorial) with one numeric parameter, then assignment of declared function to function variable and calling it 
+with argument 6
 ```
 number func factorial(number n)
   if n == 0
@@ -113,34 +150,14 @@ f()
 @a //print 1 from closure and 2 from main scope
 ```
 
-### Strings
-Strings are fully supported in Lazarus. Strings represent text.
-Mathematical `+` in case of strings do the concatenational of strings.
-Example:
-```
-string s = 'The Lazarus language' + ' is cool'
-```
-For strings also supported length operator `#` and getting literal via indexing, like in this example,
-`s[1] == 'T'` (puts true on a stack)
-
-### Array
-An array in Lazarus is a fixed-size collection of similar data items. In other words, elements in array can only be of one type.
-Array always support length operator `#` and returns a size of array provided by declaration.
-Example of declacation and using of array.
-```
-number i = 5, [number] x[i]
-while i > 0
-   x[i] = i + 5, i = i - 1
-done
-@x
-```
-
 ## Expressions
 ### Arithmetic Operators
 Language supports the usual set of arithmetic operations:
 *addition, subtraction, multiplication, division*. It also supports *modulo* and *exponentiation*.
 Using brackets alter precedence of calculations, for example:
 *(1 + 2) * 3* results in 9 
+
+Ordering of operations follows mathematical rules.
 
 ### Logical operators
 Equality operator `==` balanced by not equal operator `!=`
@@ -149,6 +166,7 @@ Different comparasion operators are supported like
 ### Unary operators
 Supported *decrement, increment, unary minus.* (--, ++, -) in infix notation. 
 Size operator `#` can be used for some data types, namely arrays and strings. In both cases, it returns size of array or string (number of literals) accordinly. 
+Unary operators has higher priority then binary operators
 
 ### Relational Operators
 Lazarus provides the following relational operators.
@@ -164,8 +182,11 @@ works without any problem, as 1/x even not calcucaled.
 
 Logical ! `NOT` operator is avaliable for boolean type.
 
-### Ternary operator
-Language provides ternary operator for conditional calculation.
+### Ternary statement
+Language provides ternary statement for conditional calculation, as a short cut for `if else` control structure.
+Main difference from `if` structure, that true and false statement can be only a single statement.
+ 
+Syntax is
 `<condition>? true statement : false statement`
 true statement only evaluates when result of condition expression is true
 Example,
@@ -177,6 +198,8 @@ x > 0 ? @'YES' : @'NO' //prints YES
 ## Identifiers
 
 An identifier is a sequence of letters and digits. The first character must be a letter, the underscore _ counts as a letter. Upper and lower case letters are different. Identifiers may have any length.
+Reserved words can't be used as identifiers
+
 ## Declaration of variables
 Before use of variable, it should be declared.
 Decralation syntax is
