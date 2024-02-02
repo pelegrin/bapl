@@ -22,15 +22,15 @@ local function VM(stack, mem, debug)
 
   -- Lazarus VM built-in functions  
   local function sysprint(exp)
-    if type(exp) == "table" then
-        io.write("Array\n")
-        ut.printtable(exp)
-        return
-    end
     local ref = getAddress(exp)
     if ref then 
       local v = mem[ref]
-      io.write("Reference to " .. v.type .. "\n")
+      if ut.isArrayType(v.type) then
+        io.write("Array\n")
+        ut.printtable(v.val)
+      else
+        io.write("Reference to " .. v.type .. "\n")
+      end
     else        
       io.write(tostring(exp).."\n")
     end
@@ -160,14 +160,14 @@ local function VM(stack, mem, debug)
         stack.push(code[pc])
       elseif code[pc] == "load" then
          pc = pc + 1
-         local v = (mem[code[pc]] or {}).val
-         if v == nil then
-           local t = (mem[code[pc]] or {})["type"]
-           if t ~= "func"  and not ut.isArrayType(t) then error("Variable is not initialized") end
+         local v = mem[code[pc]]
+         if v == nil then error("Variable is not initialized") end
+         local t = mem[code[pc]]["type"]
+         if t == "func" or ut.isArrayType(t) then
            stack.push("$" .. code[pc]) -- function reference or array reference on stack
          else
-           stack.push(v)
-         end         
+            stack.push(v.val)
+         end
       elseif code[pc] == "init" then
         pc = pc + 1
         num = pc
@@ -181,26 +181,30 @@ local function VM(stack, mem, debug)
         local i = getIndx("Index must be a positive number")
         local v = stack.pop()
         pc = pc + 1
-        local size = mem[code[pc]].size
+        local var = mem[code[pc]]
+        local ref = getAddress(var.val)
+        local a = ref and mem[ref] or var
+        local size = a.size
         if (i > size) then
           error("Index " .. tostring(i) .. " is out of range. Must be <= " .. tostring( size))
         end
-        local a = mem[code[pc]].val or {}
-        a[i] = v
-        mem[code[pc]].val = a
+        if not a.val then a.val = {} end
+        a.val[i] = v
       elseif code[pc] == "loadat" then
         local i = getIndx("Index must be a positive number")
         pc = pc + 1
-        local size = mem[code[pc]].size
+        local ref = getAddress(mem[code[pc]].val)
+        local var = ref and mem[ref] or mem[code[pc]]
+        local size = var.size
         if (i > size) then
           error("Index " .. tostring(i) .. " is out of range. Must be <= " .. tostring( size))
         end
-        local t = mem[code[pc]]["type"]
+        local t = var["type"]
         local v
         if t == "string" then
-          v = string.sub(mem[code[pc]].val, i, i)
+          v = string.sub(var.val, i, i)
         else
-          local v = mem[code[pc]].val[i]
+          v = var.val[i]
           if v == nil then error("Element is not initialized at index ".. i) end -- TODO: Return NULL value instead
         end
         stack.push(v)

@@ -1,0 +1,26 @@
+[number] x[12]
+x[1] = 10, x[2] = 7, x[3] = 90, x[4] = 8, x[5] = 1, x[6] = 2, x[7] = 100, x[8] = 5, x[9] = 0, x[10] = -1, x[11] = 80, x[12] = 9
+
+[number] func bubblesort([number] a)  
+  number size = #a
+  number passes = size - 1
+  while passes > 0
+    number i = 1
+    while i < size
+      if a[i] > a[i + 1]
+        number temp = a[i]
+        a[i] = a[i + 1]
+        a[i + 1] = temp
+      end
+      i = i + 1
+    done
+    passes = passes - 1
+  done
+  return a
+end
+
+@'Original Array'
+@x
+@'Sorted Array'
+@bubblesort(x)
+
